@@ -63,6 +63,12 @@ Cattle<-unique(tolower(c("Dairy cattle(4)", "Dairy cattle(3)", "Non-dairy cattle
                          "Dairy Replacements", "Beef Replacements", "Steer Feedlot", "Heifer Feedlot",  
                          "Dairy Cows", "Beef Calves", "Dairy Calves", "Dairy cattle(4)", "Non-dairy Cattle"))) 
 
+
+
+
+
+
+
 # Ag Soils used in Table 3.D
                             
 Ag.Soils <-c("a. Direct N2O emissions from managed soils", "1.   Inorganic N fertilizers(3)", "2.   Organic N fertilizers(3)",
@@ -138,14 +144,15 @@ for (i in CRF.1){
       rename(`Cattle Type` = 1,
              Weight = 2, # Average weight (kg/head)
              `Feeding Situation` = 3, # Pasture, Confined etc.
-             `Milk Yield `= 4, # (Kg Milk/day)
+             `Milk Yield`= 4, # (Kg Milk/day)
              Work = 5, # (hours/day)
              Pregnant = 6, # (%) 
              DE = 7, # Digestibility of feed (%)
              GE = 8)|> # Gross energy (MJ/day)
       select(1,2,4,7)|>
       mutate(`Cattle Type` = tolower(`Cattle Type`))|>
-      filter(`Cattle Type` %in% Names)
+      filter(`Cattle Type` %in% Names,
+             !is.na(Weight) & !is.na(`Milk Yield`) & !is.na (DE))
     
     
     join<-full_join(x,y) # joining two tables
@@ -157,6 +164,8 @@ for (i in CRF.1){
 #-------------------------------------------------------------------------------#
 # CH4 Emissions
 #-------------------------------------------------------------------------------#    
+    Names<-unique(append(Names,c("dairy cattle", "non-dairy cattle"))) # names needed to be modified as multiple countries switched Option C to Option A classification for manure management.
+    
     x<-read_excel(i,sheet = "Table3.B(a)s1")|>
       rename(`Cattle Type` = 1, 
              Population = 2, # Population size 1000's
@@ -175,6 +184,7 @@ for (i in CRF.1){
              Type.A = ifelse(`Cattle Type` %in% c("dairy cattle", "mature dairy cattle", "dairy cows"),"Dairy Cattle","Non-Dairy Cattle"),
              file = i)|>
              filter(`Cattle Type` %in% Names)
+
 ## Note Climate regions are defined in terms of annual average temperature as follows: cool = less than 15 °C; temperate = 15–25 °C inclusive; and  warm = greater than 25 °C (see table 10.17 of chapter 10, volume 4 of the 2006 IPCC Guidelines).
 
 #-------------------------------------------------------------------------------#
@@ -194,7 +204,7 @@ for (i in CRF.1){
               Liquid.System = 6, 
               Daily.Spread = 7, 
               Solid.Storage = 8, 
-              Pasutre = 9, 
+              Pasture = 9, 
               Composting = 10, 
               Digester = 11, 
               Burned = 12, 
@@ -221,9 +231,40 @@ for (i in CRF.1){
       separate(file, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
       select(-`NIR Year`, -Ext)|>
       mutate(Year = as.integer(Year))
-      
-    Table.3.B <-rbind(Table.3.B ,join) # Combination of Table 3.B(a)s1 and Table 3.B(b)
-
+    
+### indirect N2O emissions from N volatilisation and leaching/runoff
+  ### disagregated values are not provided in the CRF Tables.
+  ### to estimate values first total N excreted is calculated and then divided by N2O.Vol and by N2O.Runoff
+  ### Values will be later calculated by multiplying (Total N - PRP N) by the implied factors for N2O.Vol and by N2O.Runoff. 
+    
+    
+    z<-read_excel(i,sheet = "Table3.B(b)")|>
+      select(1,9,14,21,22)|>
+      rename(Livestock = 1,
+             Pasture = 2, 
+             Total.N = 3,
+             N2O.Vol = 4,
+             N2O.Runoff = 5)|>
+      filter(Livestock %in% c("1.  Cattle", "2.  Sheep", "3.  Swine", "4.    Other livestock(6)", "5. Indirect N2O emission"))|>
+      mutate(across(c("Pasture","Total.N", "N2O.Vol","Pasture","N2O.Runoff"), as.numeric),
+             Pasture = ifelse(is.na(Pasture), 0, Pasture),
+             Total.N = ifelse(is.na(Total.N), 0, Total.N),
+             N2O.Vol = ifelse(is.na(N2O.Vol), 0, N2O.Vol),
+             N2O.Runoff = ifelse(is.na(N2O.Runoff), 0, N2O.Runoff),
+             N.MM = Total.N - Pasture)|>
+      summarise(N.MM = sum(N.MM),
+                N2O.Vol = sum(N2O.Vol),
+                N2O.Runoff  = sum(N2O.Runoff))|>
+      mutate(N2O.Vol.IEF = (N2O.Vol*10^6)/N.MM,
+             N2O.Runoff.IEF = (N2O.Runoff*10^6)/N.MM)|>
+      select(N2O.Vol.IEF,N2O.Runoff.IEF)
+    
+    join<-cross_join(join,z)
+    
+ 
+    Table.3.B <-rbind(Table.3.B ,join) }}# Combination of Table 3.B(a)s1 and Table 3.B(b) 
+    
+    
 #-------------------------------------------------------------------------------#
 # Table 3.D Agricultural Soils 
 #-------------------------------------------------------------------------------#
@@ -480,8 +521,13 @@ for (i in CRF.1){
     
 # Saving Tables 
 
-
-
+fwrite(National.Emissions, file = "~/Simpson Centre/NIR/02-Data/National_Emissions_2023.csv")
+fwrite(Table.3, file = "~/Simpson Centre/NIR/02-Data/Table_3_2023.csv")
+fwrite(Table.3.Cattle, file = "~/Simpson Centre/NIR/02-Data/Table_3_Cattle_2023.csv")
+fwrite(Table.3.A, file = "~/Simpson Centre/NIR/02-Data/Table_3_A_2023.csv")
+fwrite(Table.3.B, file = "~/Simpson Centre/NIR/02-Data/Table_3_B_2023.csv")
+fwrite(Table.3.D, file = "~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
+fwrite(Table.4, file = "~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
 
 #-------------------------------------------------------------------------------#
 
@@ -490,5 +536,93 @@ for (i in CRF.1){
 #-------------------------------------------------------------------------------# 
 
 CRF.2 <-c("AUS")
+
+
+
+
+#-------------------------------------------------------------------------------#
+
+# Data Cleaning For Analysis ----
+
+#-------------------------------------------------------------------------------#
+
+Table.3.A<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_A_2023.csv")
+Table.3.B<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_B_2023.csv")
+Table.3.D<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
+Table.4<-read_csv("~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
+
+
+#-------------------------------------------------------------------------------#
+# Data Cleaning for Cattle Variables + Analysis
+#-------------------------------------------------------------------------------#
+
+## Manure Management
+
+### The section is collapsing rows into Type A groups (Dairy and Non-Dairy Cattle)
+### This section is also calculating total CH4 and N2O from Managed Manure
+
+Table.3.B<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_B_2023.csv")|>
+  select(9,10,1, 8,2,7,17,22,28)|>
+  mutate(across(c("Year","Population", "CH4.kt","Pasture","Direct.N2O"), as.numeric),
+         Pasture = ifelse(is.na(Pasture), 0, Pasture),
+         CH4.kt = ifelse(is.na(CH4.kt), 0, CH4.kt),
+         Direct.N2O = ifelse(is.na(Direct.N2O), 0, CH4.kt))|>
+  filter(!is.na(Population))|>
+  group_by(Country, Year, Type.A)|>
+  summarise(N.Pasture = sum(Pasture), #total N left on Pasture and Rangeland
+            N.Total = sum(Total.N), # total N excreted
+            CH4.MM = sum(CH4.kt), #Total kg CH4 produced
+            N2O.MM = sum(Direct.N2O)) # Total N2O produced
+
+
+## Emissions from PRP
+### IPCC classifies dung and urine deposited by grazing animals (PRP) as emissions from Agricultural soils
+### This section is selecting PRP emission factors from Table 3.D and adding them to emissions from manure management. 
+### Indirect emissions from PRP are estimated using reported IEF or IPCC default values with values are not reported
+
+Table.3.D<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")|>
+  filter(Emission.Source %in% c("N from grazing animals", "Atmospheric deposition","leaching and run-off"))|>
+  select(1,2,3,6,9,10)
+
+Table.3.D.Indirect<-Table.3.D|>
+  filter(Emission.Source %in% c("Atmospheric deposition","leaching and run-off"))|>
+  select(-5,-6)|>
+  spread(Emission.Source, IEF)
+
+Table.3.D<-full_join(Table.3.D, Table.3.D.Indirect)|>
+  filter(!Emission.Source %in% c("Atmospheric deposition","leaching and run-off"))|>
+  select(-Emission.Source)|>
+  rename(EF3.PRP = IEF,
+         EF4.NVOL = 6,
+         EF5.Leaching = 7,
+         FracLEACH = `FracLEACH-(H)`)|>
+  mutate(EF3.PRP = ifelse(is.na(EF3.PRP), 0.004, EF3.PRP), # IPCC 2019 refinement aggregated default value:  TABLE 11.1
+         EF4.NVOL = ifelse(is.na(EF4.NVOL), 0.01, EF4.NVOL), # IPCC 2019 refinement aggregated default value:  TABLE 11.3
+         EF5.Leaching = ifelse(is.na(EF5.Leaching), 0.011, EF5.Leaching), # IPCC 2019 refinement aggregated default value:  TABLE 11.3
+         FracGASM = ifelse(is.na(FracGASM), 0.21, FracGASM), # IPCC 2019 refinement aggregated default value:  TABLE 11.3
+         FracLEACH = ifelse(is.na(FracLEACH), 0.24, FracLEACH)) # IPCC 2019 refinement aggregated default value:  TABLE 11.3
+
+## Total Emissions from Manure - indirect emissions from MM
+
+MM<-full_join(Table.3.B, Table.3.D)|>
+  mutate(PRP.N2O = ((N.Pasture*EF3.PRP)*(44/28))/10^6, # See Equation 11.1 in 2019 Refinement N2O-N_prp
+         PRP.Ind = ((((N.Pasture*FracGASM)*EF4.NVOL)+((N.Pasture*FracLEACH)*EF5.Leaching))*44/28)/10^6, # See Equation 11.10 and 11.11 in 2019 Refinement
+         EM.MM = (CH4.MM*25) + ((N2O.MM+PRP.N2O+PRP.Ind)*298))
+
+## Enteric Methane Emissions
+
+Table.3.A<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_A_2023.csv")|>
+  mutate(across(c("Year","Population", "GE", "Ym", "IEF","CH4.kt", "Total.Pop", "Share.Pop","Weight", "Milk Yield", "DE"), as.numeric),
+         `Milk Yield` = ifelse(Type.A == "Non-Dairy Cattle", 0, `Milk Yield`))|>
+  filter(!is.na(CH4.kt))
+  
+
+
+
+
+
+
+
+
 
 
