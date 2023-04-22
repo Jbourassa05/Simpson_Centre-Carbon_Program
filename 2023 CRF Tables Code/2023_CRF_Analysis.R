@@ -262,7 +262,7 @@ for (i in CRF.1){
     join<-cross_join(join,z)
     
  
-    Table.3.B <-rbind(Table.3.B ,join) }}# Combination of Table 3.B(a)s1 and Table 3.B(b) 
+    Table.3.B <-rbind(Table.3.B ,join) # Combination of Table 3.B(a)s1 and Table 3.B(b) 
     
     
 #-------------------------------------------------------------------------------#
@@ -562,18 +562,38 @@ Table.4<-read_csv("~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
 ### This section is also calculating total CH4 and N2O from Managed Manure
 
 Table.3.B<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_B_2023.csv")|>
-  select(9,10,1, 8,2,7,17,22,28)|>
+  select(9,10,1, 8,2,7,17,22,28, 31,32)|>
   mutate(across(c("Year","Population", "CH4.kt","Pasture","Direct.N2O"), as.numeric),
          Pasture = ifelse(is.na(Pasture), 0, Pasture),
          CH4.kt = ifelse(is.na(CH4.kt), 0, CH4.kt),
-         Direct.N2O = ifelse(is.na(Direct.N2O), 0, CH4.kt))|>
-  filter(!is.na(Population))|>
+         Direct.N2O = ifelse(is.na(Direct.N2O), 0, Direct.N2O))|>
+  filter(!is.na(Population))
+  
+#-------------------------------------------------------------------------------#         
+### Correcting for Missing Values or Zero Values
+  ### EU average used for N2O.Runoff.IEF for EU countries
+  # Canadian Values are used for the United States
+#-------------------------------------------------------------------------------#
+
+EU<-filter(Table.3.B, Country == "EUA" &  Type.A == "Dairy Cattle")|> select(Year, N2O.Runoff.IEF, N2O.Vol.IEF)|>rename(Runoff.EU = N2O.Runoff.IEF, Vol.EU= N2O.Vol.IEF)
+CAN<-filter(Table.3.B, Country == "CAN" &  Type.A == "Dairy Cattle")|> select(Year, N2O.Runoff.IEF, N2O.Vol.IEF)|>rename(Runoff.CAN = N2O.Runoff.IEF, Vol.CAN= N2O.Vol.IEF)
+
+Table.3.B<-full_join(Table.3.B,EU)
+Table.3.B<-full_join(Table.3.B,CAN)
+
+Table.3.B<-Table.3.B|>
+  mutate(N2O.Vol.IEF = ifelse(Pasture != Total.N & Country == "USA" & N2O.Vol.IEF == 0, Vol.CAN, 
+                              ifelse(Pasture != Total.N & N2O.Vol.IEF == 0 , Vol.EU, N2O.Vol.IEF)),
+         N2O.Runoff.IEF = ifelse(Pasture != Total.N & Country == "USA" & N2O.Runoff.IEF ==0, Runoff.CAN,
+                                ifelse(Pasture != Total.N & N2O.Runoff.IEF == 0, Runoff.EU, N2O.Runoff.IEF)))|>
+  select(-12,-13,-14,-15)|>
+  mutate(Indirect.N2O = ((((Total.N-Pasture)*N2O.Vol.IEF))+((Total.N-Pasture)*N2O.Runoff.IEF))/10^6)|>
   group_by(Country, Year, Type.A)|>
   summarise(N.Pasture = sum(Pasture), #total N left on Pasture and Rangeland
-            N.Total = sum(Total.N), # total N excreted
             CH4.MM = sum(CH4.kt), #Total kg CH4 produced
-            N2O.MM = sum(Direct.N2O)) # Total N2O produced
-
+            N2O.MM = sum(Direct.N2O),
+            Indirect.N2O = sum(Indirect.N2O))|> # Total N2O produced
+  mutate(Indirect.N2O = ifelse(Country == "NZL", 0, Indirect.N2O))
 
 ## Emissions from PRP
 ### IPCC classifies dung and urine deposited by grazing animals (PRP) as emissions from Agricultural soils
@@ -607,14 +627,59 @@ Table.3.D<-full_join(Table.3.D, Table.3.D.Indirect)|>
 MM<-full_join(Table.3.B, Table.3.D)|>
   mutate(PRP.N2O = ((N.Pasture*EF3.PRP)*(44/28))/10^6, # See Equation 11.1 in 2019 Refinement N2O-N_prp
          PRP.Ind = ((((N.Pasture*FracGASM)*EF4.NVOL)+((N.Pasture*FracLEACH)*EF5.Leaching))*44/28)/10^6, # See Equation 11.10 and 11.11 in 2019 Refinement
-         EM.MM = (CH4.MM*25) + ((N2O.MM+PRP.N2O+PRP.Ind)*298))
+         EM.MM = (CH4.MM*25) + ((N2O.MM+PRP.N2O+PRP.Ind+Indirect.N2O)*298))|>
+  select(-8:-12)
 
 ## Enteric Methane Emissions
 
 Table.3.A<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_A_2023.csv")|>
   mutate(across(c("Year","Population", "GE", "Ym", "IEF","CH4.kt", "Total.Pop", "Share.Pop","Weight", "Milk Yield", "DE"), as.numeric),
-         `Milk Yield` = ifelse(Type.A == "Non-Dairy Cattle", 0, `Milk Yield`))|>
-  filter(!is.na(CH4.kt))
+         `Milk Yield` = ifelse(Type.A == "Non-Dairy Cattle", 0, `Milk Yield`),
+         W.Weight = Weight*Share.Pop,
+         W.GE = GE*Share.Pop,
+         W.Ym = Ym*GE)|>
+  filter(!is.na(CH4.kt)|!is.na(Population))|>
+  group_by(Type.A, Year, Country)|>
+  summarise(Population = sum(Population),
+            EM.CH4 = sum(CH4.kt),
+            GE = sum(W.GE),
+            Ym = sum(W.Ym),
+            Weight = sum(W.Weight),
+            `Milk Yield` = sum(`Milk Yield`))
+
+
+# Correcting for missing Values or large outliers
+
+EU<-Table.3.A|>filter(Country == "EUA")|>select(Year, Weight,  Type.A)|>rename(Weight.EU = Weight)
+USA <- Table.3.A|>filter(Country == "USA")|>select(Year,Type.A, Weight)|>rename(Weight.US = Weight)
+
+Table.3.A<-full_join(Table.3.A, EU)
+Table.3.A<-full_join(Table.3.A, USA)
+  
+Enteric<-Table.3.A|>
+  mutate(Weight = ifelse(!is.na(Weight), Weight.EU, Weight), # Correcting for NA Values
+         Weight = ifelse(Country == "DNK", Weight.EU, # Cattle Weight in Denmark outlier 
+                         ifelse(Country =="CAN" & Type.A == "Non-Dairy Cattle", Weight.US, Weight)),# non-dairy Cattle Weight in Canada outlier  
+         EM.CO2eq = EM.CH4*25)|>select(-10,-11)
+
+
+NIR_2023_Cattle<-full_join(Enteric, MM, by=c("Year" = "Year", "Country" = "Country", "Type.A" = "Type.A"))|>
+  mutate(`Total Emissions kt.CO2.eq` = EM.CO2eq+EM.MM,
+         `kg.CO2.eq/head` = (`Total Emissions kt.CO2.eq`/Population)*1000,
+         `head/day` = `kg.CO2.eq/head` /365,
+         Mcal = GE/4.184,
+         `EM/Mcal` = `head/day`/Mcal,
+         `EM/kg` = `kg.CO2.eq/head`/Weight,
+         `EM/kg.Milk` = `head/day`/`Milk Yield`)
+  
+fwrite(NIR_2023_Cattle, file = "~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle")                           
+                           
+                           
+                           
+                           
+                           
+                           
+                         
   
 
 
