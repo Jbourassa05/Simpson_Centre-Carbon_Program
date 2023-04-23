@@ -269,6 +269,11 @@ for (i in CRF.1){
 # Table 3.D Agricultural Soils 
 #-------------------------------------------------------------------------------#
 
+    Ag.Soils<-c("a. Direct N2O emissions from managed soils", "1.   Inorganic N fertilizers(3)", "2.   Organic N fertilizers(3)",
+      "3.   Urine and dung deposited by grazing animals", "4.   Crop residues", "5.  Mineralization/immobilization associated with loss/gain of soil organic matter (4)(5)",
+      "6.   Cultivation of organic soils (i.e. histosols)(2)", "7.   Other", "b. Indirect N2O Emissions from managed soils", "1.   Atmospheric deposition(6)", "2.   Nitrogen leaching and run-off")
+    
+
     x<-read_excel(i,sheet = "Table3.D")|>
       rename(Emission.Source = 1, 
              Description = 2, 
@@ -536,6 +541,477 @@ fwrite(Table.4, file = "~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
 #-------------------------------------------------------------------------------# 
 
 CRF.2 <-c("AUS")
+
+Table.3.A.2 <- data.frame()
+Table.3.B.2 <- data.frame()
+Table.3.D.2 <- data.frame()
+Table.4.2 <- data.frame()
+Table.3.Cattle.2<-data.frame()
+Table.3.2 <- data.frame()
+National.Emissions.2 <-data.frame()
+
+#-------------------------------------------------------------------------------#
+# Enteric Fermentation=      
+#-------------------------------------------------------------------------------# 
+for (i in CRF.2){
+  File <-paste(i,"_2023_", 1990:2021, ".xlsx", sep = "")
+  for (i in File) {
+    
+    x<-read_excel(i, sheet = "Table3.A")
+    y<-x
+    
+    x<-x|>
+      select(1:6)|>
+      rename(`Cattle Type` = 1,
+             Population = 2, 
+             GE = 3,
+             Ym = 4,
+             IEF = 5,
+             CH4.kt = 6)|>
+      filter(`Cattle Type` %in% c("Dairy Cattle", "Beef Cattle - Pasture", "Beef Cattle - Feedlot"))|> #AUS Categories
+      mutate(`Cattle Type` = tolower(`Cattle Type`),
+             Type.A = ifelse(`Cattle Type` == "dairy cattle", "Dairy Cattle", "Non-Dairy Cattle"),
+             File = i)|>
+      separate(File, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
+      select(-`NIR Year`, -Ext)|>
+      group_by(Country, Year, Type.A)|> # Estimating weights to calculate weighted average... Find outside loop
+      mutate(Population = as.numeric(Population), 
+             Total.Pop = sum(Population),
+             Share.Pop = Population/Total.Pop)
+    
+    y<-y|>select(-1:-7)
+    y<-data.table(t(y))
+    row.names(y)<-NULL
+
+    y<-y|>
+      select(6, 9:14)|>
+      rename(`Cattle Type` = 1,
+             Weight = 2, # Average weight (kg/head)
+             `Feeding Situation` = 3, # Pasture, Confined etc.
+             `Milk Yield`= 4, # (Kg Milk/day)
+             Work = 5, # (hours/day)
+             Pregnant = 6, # (%) 
+             DE = 7)|> # Digestibility of feed (%)
+      select(1,2,4,7)|>
+      mutate(`Cattle Type` = tolower(`Cattle Type`))|>
+      filter(`Cattle Type` %in% c("dairy cattle", "beef cattle - pasture", "beef cattle - feedlot"))
+      
+      
+      join<-full_join(x,y)
+      
+      Table.3.A.2<-rbind(Table.3.A.2, join)
+      
+#-------------------------------------------------------------------------------#      
+# Manure Management CH4    
+#-------------------------------------------------------------------------------#      
+      
+      x<-read_excel(i,sheet = "Table3.B(a)")|>
+        select(1:10)|>
+        rename(`Cattle Type` = 1, 
+               Population = 2, # Population size 1000's
+               Cool.Temp = 3, # Allocation by climate region (%)
+               Temperate.Temp = 4, # Allocation by climate region (%)
+               Warm.Temp = 5, # Allocation by climate region (%)
+               kg = 6, # Typical Animal Mass (kg)
+               VS = 7, # Volatile Solids, Average Daily Production (kg dry matrer/head/day)
+               B0 = 8, # maximum methane producing capacity for manure (m^3 CH4/ kg VS) (pp. 10.42 and 10.43 of chapter 10, volume 4 of the 2006 IPCC Guidelines)
+               IEF = 9, # Implied Emission Factor (kg CH4/head/year)
+               CH4.kt = 10)|> # Emissions kt CH4
+        select(-3,-4,-5)|>
+        mutate(`Cattle Type` = tolower(`Cattle Type`),
+               `Cattle Type` = as.character(`Cattle Type`),
+               `Cattle Type` = ifelse(`Cattle Type` == "dairy cattle(3)"| `Cattle Type` == "dairy cattle(4)","dairy cattle",`Cattle Type`),
+               Type.A = ifelse(`Cattle Type` %in% c("dairy cattle", "mature dairy cattle", "dairy cows"),"Dairy Cattle","Non-Dairy Cattle"),
+               file = i)|>
+        filter(`Cattle Type` %in% c("dairy cattle", "beef cattle - pasture", "beef cattle - feedlot"))
+      
+#-------------------------------------------------------------------------------#      
+# Manure Management N2O    
+#-------------------------------------------------------------------------------#      
+
+      y<-read_excel(i,sheet = "Table3.B(b)")
+        
+      z<-y
+      
+      y<-y|>
+        rename( `Cattle Type` = 1, 
+                Population = 2, # Population size 1000's
+                `Nitrogen excretion rate` = 3, # kg N/head/year
+                `Typical animal mass` = 4, # kg/Animal
+                #-----------------------------------------------------------------#
+                #Nitrogen excretion per manure management system (MMS)  (kg N/yr)
+                Anarobic.Lagoon = 5, 
+                Liquid.System = 6, 
+                Daily.Spread = 7, 
+                Solid.Storage = 8, 
+                Pit.Storage = 9,
+                Dry.Lot = 10, 
+                Deep.Bedding = 11,
+                Pasture = 12, 
+                Composting = 13, 
+                Digester = 14, 
+                Burned = 15, 
+                Other = 16, 
+                #-----------------------------------------------------------------#
+                Total.N = 17, # Total Nitrogen excreted (kg/yr)
+                Total.N.Vol = 18, # Total N volatilized as NH3 and NOx (kgN/yr)
+                Total.N.Leaching = 19, # Total N Lost through leaching and run-off (kg N/yr)
+                Direct.IEF = 20, # Implied emission factor, Direct N2O (kg N2O-N/year) *** N2O-N * (48/22) = N2O
+                Indirect.IEF.Atmos =21, # Implied emission factor, indirect emissions 
+                Indirect.IEF.Leaching = 22, # Implied emission factor, indirect emissions 
+                Direct.N2O = 23, # Direct emissions (kt N2O)
+                Indirect.N2O.Atmos = 24, # indirect emissions (kt N2O)
+                Indirect.N2O.Leaching = 25)|> # indirect emissions (kt N2O)
+        drop_na(Population)|>
+        mutate(`Cattle Type` = tolower(`Cattle Type`),
+               `Cattle Type` = as.character(`Cattle Type`),
+               file = i)|>
+        filter(`Cattle Type` %in% c("dairy cattle", "beef cattle - pasture", "beef cattle - feedlot"))|>
+        select(-Population)|>
+        mutate(across(c("Nitrogen excretion rate":"Indirect.N2O.Leaching"), as.numeric))
+      
+      join<-full_join(x,y)|>
+        separate(file, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
+        select(-`NIR Year`, -Ext)|>
+        mutate(Year = as.integer(Year))
+        
+      ### indirect N2O emissions from N volatilisation and leaching/runoff
+      ### disagregated values are not provided in the CRF Tables.
+      ### to estimate values first total N excreted is calculated and then divided by N2O.Vol and by N2O.Runoff
+      ### Values will be later calculated by multiplying (Total N - PRP N) by the implied factors for N2O.Vol and by N2O.Runoff. 
+      
+      
+      z<-select(z,1,12,17,24,25)|>
+        rename(Livestock = 1,
+               Pasture = 2, 
+               Total.N = 3,
+               N2O.Vol = 4,
+               N2O.Runoff = 5)|>
+        filter(Livestock %in% c("3.B.1. Cattle", "3.B.2. Sheep", "3.B.3. Swine", "3.B.4.    Other livestock(6)", "3.B.5. Indirect N2O emissions"))|>
+        mutate(across(c("Pasture","Total.N", "N2O.Vol","Pasture","N2O.Runoff"), as.numeric),
+               Pasture = ifelse(is.na(Pasture), 0, Pasture),
+               Total.N = ifelse(is.na(Total.N), 0, Total.N),
+               N2O.Vol = ifelse(is.na(N2O.Vol), 0, N2O.Vol),
+               N2O.Runoff = ifelse(is.na(N2O.Runoff), 0, N2O.Runoff),
+               N.MM = Total.N - Pasture)|>
+        summarise(N.MM = sum(N.MM),
+                  N2O.Vol = sum(N2O.Vol),
+                  N2O.Runoff  = sum(N2O.Runoff))|>
+        mutate(N2O.Vol.IEF = (N2O.Vol*10^6)/N.MM,
+               N2O.Runoff.IEF = (N2O.Runoff*10^6)/N.MM)|>
+        select(N2O.Vol.IEF,N2O.Runoff.IEF)
+      
+      join<-cross_join(join,z)
+      
+      
+      Table.3.B.2 <-rbind(Table.3.B.2 ,join)
+
+#-------------------------------------------------------------------------------#
+# Table 3.D Agricultural Soils 
+#-------------------------------------------------------------------------------#
+      
+      x<-read_excel(i,sheet = "Table3.D")
+      y<-x
+      
+      x<-select(x,1:5)|>
+        rename(Emission.Source = 1, 
+               Description = 2, 
+               Application = 3, # kg of nitrogen or ha of organic soil cultivated
+               IEF = 4, # implied emission factor (kg N2O-N/kg N) *** N2O-N * (48/22) = N2O
+               Emissions.kt = 5)|> #total emissions kt N2O
+        filter(Emission.Source %in% Ag.Soils)|>
+        mutate(File = i)|>
+        separate(File, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
+        select(-`NIR Year`, -Ext)|>
+        mutate(Emission.Source = recode(Emission.Source ,
+                                        "a. Direct N2O emissions from managed soils" = "Direct N2O emissions", 
+                                        "1.   Inorganic N fertilizers(3)" = "Inorganic N emissions"  ,
+                                        "2.   Organic N fertilizers(3)" = "Organic N emissions",
+                                        "3.   Urine and dung deposited by grazing animals" = "N from grazing animals", # classified as emissions from animal production under economic sector approach
+                                        "4.   Crop residues"= "Crop residues",
+                                        "5.  Mineralization/immobilization associated with loss/gain of soil organic matter (4)(5)" = "Mineralization/immobilization",
+                                        "6.   Cultivation of organic soils (i.e. histosols)(2)" = "Organic Soils",
+                                        "7.   Other" = "Other",
+                                        "b. Indirect N2O Emissions from managed soils" = "Indirect N2O emissions",
+                                        "1.   Atmospheric deposition(6)" = "Atmospheric deposition",
+                                        "2.   Nitrogen leaching and run-off" = "leaching and run-off"),
+               Application = as.numeric(Application),
+               IEF = as.numeric(IEF),
+               Emissions.kt = as.numeric(Emissions.kt))|>
+        select(6,7,1:5)
+      
+#-------------------------------------------------------------------------------#
+# Indirect Emission fractions
+#-------------------------------------------------------------------------------#   
+      
+      y<-read_excel(i,sheet = "Table3.D")|>
+        rename(Fraction = 1,
+               F.Description  = 2,
+               Value = 3)|>
+        select(-2,-4,-5)|>
+        filter(Fraction %in% c("FracGASF", "FracGASM", "FracLEACH-(H)"))|>
+        spread(Fraction, Value)
+      
+      join<-cross_join(x,y)|>
+        mutate(Emission = "N2O")
+      
+      # Description:
+      # FracGASF: Fraction of synthetic fertilizer N applied to soils that volatilises as NH3 and NOX
+      # FracGASM:  Fraction of livestock N excretion that volatilises as NH3 and NOX
+      # FracLEACH-(H):  of N input to managed soils that is lost through leaching and run-off
+      
+      
+#-------------------------------------------------------------------------------#
+#Table 3.H + Table 3.I  CO2 emissions from Urea and other Carbon Containing Fertilizers (UAN) 
+#-------------------------------------------------------------------------------#
+      
+      y<-read_excel(i,sheet = "Table3.G-I")|>
+        rename(Emission.Source = 1,
+               Application = 2, # Urea or Other Carbon Containing Fertilizer Application (t/yr)
+               IEF = 3, # Implied Emission Factor, Tonnes CO2/t applied (t CO2–C/t)
+               Emissions.kt = 4)|> # Emissions kt CO2
+        mutate(Application = as.numeric(Application),
+               IEF = as.numeric(IEF),
+               Emissions.kt = as.numeric(Emissions.kt),
+               Description = NA,
+               FracGASF = NA,
+               FracGASM = NA,
+               `FracLEACH-(H)` = NA)|>
+        filter(Emission.Source %in% c("H.  Urea application", "I.  Other carbon-containing fertlizers"))|>
+        mutate(Emission.Source = recode(Emission.Source, 
+                                        "H.  Urea application" = "Urea",
+                                        "I.  Other carbon-containing fertlizers" = "Other carbon-containing fertlizers"),
+               Emission = "CO2",
+               File = i)|>
+        separate(File, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
+        select(-`NIR Year`, -Ext)
+      
+      
+      
+      Table.3.D.2 <- rbind(Table.3.D.2, join, y) # Table 3.D and Table 3. G-I  including additional information from fraction lost to NH3 and L&R    
+      
+#-------------------------------------------------------------------------------# 
+      
+# Table 4.B + Table 4.C Agricultural Land Use (cropland + grassland)
+      
+#-------------------------------------------------------------------------------#
+# Cropland: Table4.B
+#-------------------------------------------------------------------------------#
+      
+      x <- read_excel(i,sheet = "Table4.B") 
+      
+      x<-x|>
+        select(1, 3, 18)|>
+        rename(`Land Use` = 1, 
+               Total.Area.kha = 2, # Total Area measured in (kha)
+               Emissions.kt= 3)|> #Total CO2 emissions and removals (kt), negitive values equal carbon removals
+        filter(`Land Use` %in% Land.Use)|>
+        mutate(`Land Use` = recode(`Land Use`, 
+                                   "B. Total Cropland" = "Total Cropland", # total area and total emissions
+                                   "1. Cropland remaining cropland" = "Remaining Cropland", # total area and emissions for land use remaining unchanged
+                                   "2. Land converted to cropland(10)" = "Conversion to Cropland"), # Total area and emissions from land use conversion
+               Total.Area.kha = as.numeric(Total.Area.kha),
+               Emissions.kt = as.numeric(Emissions.kt ),
+               t.ha = Emissions.kt/Total.Area.kha, #Emissions per hectare (Negitive values indicate net carbon sink) measured in t CO2/ha
+               File = i )|>
+        separate(File, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
+        select(-`NIR Year`, -Ext)|>
+        select(5,6,1,2,3,4)
+      
+#-------------------------------------------------------------------------------#
+# Grasslands: Table4.C
+#-------------------------------------------------------------------------------#    
+      
+      y <- read_excel(i,sheet = "Table4.C")
+      
+      y<-y|>
+        select(1, 3, 18)|>
+        rename(`Land Use` = 1,
+               Total.Area.kha = 2, # Total Area measured in (kha)
+               Emissions.kt= 3)|> #Total CO2 emissions and removals (kt), negitive values equal carbon removals
+        filter(`Land Use` %in% Land.Use)|>
+        mutate(`Land Use` = recode(`Land Use`, 
+                                   "C. Total grassland" = "Total Grassland", # total area and total emissions
+                                   "1. Grassland remaining grassland" = "Remaining Grassland", # total area and emissions for land use remaining unchanged
+                                   "2. Land converted to grassland(9)" = "Conversion to Grassland "), # Total area and emissions from land use conversion
+               Total.Area.kha = as.numeric(Total.Area.kha),
+               Emissions.kt = as.numeric(Emissions.kt ),
+               t.ha = Emissions.kt/Total.Area.kha, #Emissions per hectare (Negitive values indicate net carbon sink) measured in t CO2/ha
+               File = i )|>
+        separate(File, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
+        select(-`NIR Year`, -Ext)|>
+        select(5,6,1,2,3,4)
+      
+      Table.4  <- rbind(Table.4, x, y) # Table combining both Table 4.B and Table 4.C
+      
+      
+#-------------------------------------------------------------------------------#
+      
+# Table 3: Agriculture Summary
+
+#-------------------------------------------------------------------------------#
+# Table 3s1: Livestock emissions from enteric fermentation and Manure management  
+#-------------------------------------------------------------------------------#
+      x <- read_excel(i, sheet = "Table3s1", col_types = c("text","numeric", "numeric",
+                                                           "numeric","text", "text", "text"))|>
+        select(1,2,3,4)|>
+        rename(Category = 1,
+               CO2 = 2, #measured in kt
+               CH4 = 3, #measured in kt
+               N2O = 4)|> #measured in kt
+        filter(Category %in% c("3. Total agriculture",
+                               "A. Enteric fermentation",
+                               "B.  Manure management"))|>
+        mutate(File = i)
+#-------------------------------------------------------------------------------#
+# Table 3s2:  Emissions from other Ag Sources
+#-------------------------------------------------------------------------------#
+      y <- read_excel(i, sheet = "Table3s2",col_types = c("text","numeric", "numeric", "numeric", 
+                                                          "text", "text", "text"))|>
+        select(1,2,3,4)|>
+        rename(Category = 1,
+               CO2 = 2,
+               CH4 = 3, 
+               N2O = 4)|>
+        filter(Category %in% c("C.  Rice cultivation",
+                               "D.  Agricultural soils(2) (3) (4)",
+                               "E.  Prescribed burning of savannas",
+                               "F.  Field burning of agricultural residues",
+                               "G.  Liming",
+                               "H.  Urea application",
+                               "I.  Other carbon-containing fertilizers",
+                               "J.  Other (please specify)"))%>%
+        mutate(File = i)
+      
+      join<-rbind(x,y)|>
+        separate(File, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
+        select(-`NIR Year`, -Ext)|>
+        mutate(Year = as.integer(Year),
+               CO2 = ifelse(is.na(CO2),0,CO2), #measured in kt
+               CH4 = ifelse(is.na(CH4),0,CH4), #measured in kt
+               N2O = ifelse(is.na(N2O),0,N2O), #measured in kt
+               CO2eq.kt = CO2+(CH4*25)+(N2O*298), #measured in kt *** 100 GWP used, CH4 = 25, N2O = 298
+               Category = recode(Category,
+                                 "3. Total agriculture" = "Total Agriculture",
+                                 "A. Enteric fermentation" = "Enteric Fermentation",
+                                 "B.  Manure management" = "Manure Management", 
+                                 "C.  Rice cultivation" = "Rice cultivation", 
+                                 "D.  Agricultural soils(2) (3) (4)" = "Agricultural soils",
+                                 "E.  Prescribed burning of savannas" = "Prescribed Burning of Savannas",
+                                 "F.  Field burning of agricultural residues" = "Field Burning of Agricultural Residues",
+                                 "G.  Liming" = "Liming",
+                                 "H.  Urea application" = "Urea Application",
+                                 "I.  Other carbon-containing fertilizers" = "Other Carbon-containing Fertilizers",
+                                 "J.  Other (please specify)" = "Other Sources"))|>
+        select(5,6,1,2,3,4,7)
+      
+      Table.3 <-rbind(Table.3, join)
+      
+#-------------------------------------------------------------------------------#
+# Cattle Specific Summary   
+#-------------------------------------------------------------------------------# 
+# Table 3s1: Cattle emissions from enteric fermentation and Manure management  
+#-------------------------------------------------------------------------------# 
+      
+      Names.2<-tolower(append(Names, c("I. Livestock", "A. Enteric fermentation", "1.   Cattle(1)", "B.  Manure management", "1.    Cattle(1)", "5. Indirect N2O emissions")))
+      
+      x <- read_excel(i, sheet = "Table3s1", col_types = c("text","numeric", "numeric",
+                                                           "numeric","text", "text", "text"))|>
+        select(1,2,3,4)|>
+        rename(Category = 1,
+               CO2 = 2,
+               CH4 = 3, 
+               N2O = 4)|>
+        mutate(Category = tolower(Category))|>
+        filter(Category %in% Names.2)|>
+        mutate(File = i)|>
+        separate(File, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
+        select(-`NIR Year`, -Ext)|>
+        mutate(Year = as.integer(Year),
+               CO2 = ifelse(is.na(CO2),0,CO2), #measured in kt
+               CH4 = ifelse(is.na(CH4),0,CH4), #measured in kt
+               N2O = ifelse(is.na(N2O),0,N2O), #measured in kt
+               CO2eq.kt = CO2+(CH4*25)+(N2O*298), #measured in kt *** 100 GWP used, CH4 = 25, N2O = 298
+               Category = ifelse(Category == "i. livestock", "total livestock",
+                                 ifelse(Category == "a. enteric fermentation", "enteric fermentation",
+                                        ifelse(Category =="1.   cattle(1)", "cattle subtotal",
+                                               ifelse(Category == "b.  manure management", "manure management",
+                                                      ifelse(Category == "1.    cattle(1)", "cattle subtotal",
+                                                             ifelse(Category == "5. indirect n2o emissions","indirect n2o emissions", Category)))))),
+               EM.Source = ifelse(Category %in% c("total livestock", "enteric fermentation", "manure management"), "total",
+                                  ifelse(N2O == 0, "enteric fermentation", "manure management")))
+      
+      Table.3.Cattle<-rbind(Table.3.Cattle, x)
+      
+      #-------------------------------------------------------------------------------#
+      # National Emissions Summary  
+      #-------------------------------------------------------------------------------# 
+      # Table Summary 2, values shown in kt CO2 eq for each source
+      
+      x<-read_excel(i,sheet = "Summary2", col_types = c("text","text", "text", "text", "text", "text", 
+                                                        "text", "text", "text", "numeric"))|>
+        select(1,10)|>
+        rename(File = 1,
+               CO2eq = 2)|> # Measured in kt CO2 eq
+        filter(File == "Total (net emissions)(1)")|>
+        mutate(File = i,
+               CO2eq = round((CO2eq/1000),2))|>
+        separate(File, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
+        select(-`NIR Year`, -Ext)|>
+        mutate(Year = as.numeric(Year))
+      
+      National.Emissions<-rbind(National.Emissions, x)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
