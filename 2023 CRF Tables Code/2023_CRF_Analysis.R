@@ -536,8 +536,7 @@ fwrite(Table.4, file = "~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
 
 #-------------------------------------------------------------------------------#
 
-# CRF Type 2 Loop ----
-
+## CRF Type 2 Loop ----
 #-------------------------------------------------------------------------------# 
 
 CRF.2 <-c("AUS")
@@ -546,8 +545,6 @@ Table.3.A.2 <- data.frame()
 Table.3.B.2 <- data.frame()
 Table.3.D.2 <- data.frame()
 Table.4.2 <- data.frame()
-Table.3.Cattle.2<-data.frame()
-Table.3.2 <- data.frame()
 National.Emissions.2 <-data.frame()
 
 #-------------------------------------------------------------------------------#
@@ -719,22 +716,33 @@ for (i in CRF.2){
                Application = 3, # kg of nitrogen or ha of organic soil cultivated
                IEF = 4, # implied emission factor (kg N2O-N/kg N) *** N2O-N * (48/22) = N2O
                Emissions.kt = 5)|> #total emissions kt N2O
-        filter(Emission.Source %in% Ag.Soils)|>
+        filter(Emission.Source %in% c("3.D.1. Direct N2O emissions from managed soils",
+                                      "3.D.1.a.  Inorganic N fertilizers (3)",
+                                      "3.D.1.b.   Organic N fertilizers (3)" ,
+                                      "3.D.1.b.i. Animal manure applied to soils",
+                                      "3.D.1.c.   Urine and dung deposited by grazing animals",
+                                      "3.D.1.d.   Crop residues",
+                                      "3.D.1.e.   Mineralization/immobilization associated with loss/gain of soil organic matter (4,5)",
+                                      "3.D.1.f.   Cultivation of organic soils (i.e. histosols) (2)",
+                                      "3.D.1.g.   Other",
+                                      "3.D.2. Indirect N2O Emissions from managed soils",
+                                      "3.D.2.a.   Atmospheric deposition (6)",
+                                      "3.D.2.b.   Nitrogen leaching and run-off"))|>
         mutate(File = i)|>
         separate(File, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
         select(-`NIR Year`, -Ext)|>
         mutate(Emission.Source = recode(Emission.Source ,
-                                        "a. Direct N2O emissions from managed soils" = "Direct N2O emissions", 
-                                        "1.   Inorganic N fertilizers(3)" = "Inorganic N emissions"  ,
-                                        "2.   Organic N fertilizers(3)" = "Organic N emissions",
-                                        "3.   Urine and dung deposited by grazing animals" = "N from grazing animals", # classified as emissions from animal production under economic sector approach
-                                        "4.   Crop residues"= "Crop residues",
-                                        "5.  Mineralization/immobilization associated with loss/gain of soil organic matter (4)(5)" = "Mineralization/immobilization",
-                                        "6.   Cultivation of organic soils (i.e. histosols)(2)" = "Organic Soils",
-                                        "7.   Other" = "Other",
-                                        "b. Indirect N2O Emissions from managed soils" = "Indirect N2O emissions",
-                                        "1.   Atmospheric deposition(6)" = "Atmospheric deposition",
-                                        "2.   Nitrogen leaching and run-off" = "leaching and run-off"),
+                                        "3.D.1. Direct N2O emissions from managed soils" = "Direct N2O emissions", 
+                                        "3.D.1.a.  Inorganic N fertilizers (3)" = "Inorganic N emissions"  ,
+                                        "3.D.1.b.   Organic N fertilizers (3)" = "Organic N emissions",
+                                        "3.D.1.c.   Urine and dung deposited by grazing animals" = "N from grazing animals", # classified as emissions from animal production under economic sector approach
+                                        "3.D.1.d.   Crop residues"= "Crop residues",
+                                        "3.D.1.e.   Mineralization/immobilization associated with loss/gain of soil organic matter (4,5)" = "Mineralization/immobilization",
+                                        "3.D.1.f.   Cultivation of organic soils (i.e. histosols) (2)" = "Organic Soils",
+                                        "3.D.1.g.   Other" = "Other",
+                                        "3.D.2. Indirect N2O Emissions from managed soils" = "Indirect N2O emissions",
+                                        "3.D.2.a.   Atmospheric deposition (6)" = "Atmospheric deposition",
+                                        "3.D.2.b.   Nitrogen leaching and run-off" = "leaching and run-off"),
                Application = as.numeric(Application),
                IEF = as.numeric(IEF),
                Emissions.kt = as.numeric(Emissions.kt))|>
@@ -744,12 +752,12 @@ for (i in CRF.2){
 # Indirect Emission fractions
 #-------------------------------------------------------------------------------#   
       
-      y<-read_excel(i,sheet = "Table3.D")|>
+      y<-select(y,7,8,9)|>
         rename(Fraction = 1,
                F.Description  = 2,
                Value = 3)|>
-        select(-2,-4,-5)|>
         filter(Fraction %in% c("FracGASF", "FracGASM", "FracLEACH-(H)"))|>
+        select(-F.Description)|>
         spread(Fraction, Value)
       
       join<-cross_join(x,y)|>
@@ -762,10 +770,10 @@ for (i in CRF.2){
       
       
 #-------------------------------------------------------------------------------#
-#Table 3.H + Table 3.I  CO2 emissions from Urea and other Carbon Containing Fertilizers (UAN) 
+#Table 3.H + Table 3.J  CO2 emissions from Urea and other Carbon Containing Fertilizers (UAN) 
 #-------------------------------------------------------------------------------#
       
-      y<-read_excel(i,sheet = "Table3.G-I")|>
+      y<-read_excel(i,sheet = "Table3.G-J")|>
         rename(Emission.Source = 1,
                Application = 2, # Urea or Other Carbon Containing Fertilizer Application (t/yr)
                IEF = 3, # Implied Emission Factor, Tonnes CO2/t applied (t CO2–C/t)
@@ -777,10 +785,10 @@ for (i in CRF.2){
                FracGASF = NA,
                FracGASM = NA,
                `FracLEACH-(H)` = NA)|>
-        filter(Emission.Source %in% c("H.  Urea application", "I.  Other carbon-containing fertlizers"))|>
+        filter(Emission.Source %in% c("3.H.  Urea application","3.I.   Other carbon-containing fertilizers"))|>
         mutate(Emission.Source = recode(Emission.Source, 
-                                        "H.  Urea application" = "Urea",
-                                        "I.  Other carbon-containing fertlizers" = "Other carbon-containing fertlizers"),
+                                        "3.H.  Urea application" = "Urea",
+                                        "3.I.   Other carbon-containing fertilizers" = "Other carbon-containing fertlizers"),
                Emission = "CO2",
                File = i)|>
         separate(File, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
@@ -805,11 +813,11 @@ for (i in CRF.2){
         rename(`Land Use` = 1, 
                Total.Area.kha = 2, # Total Area measured in (kha)
                Emissions.kt= 3)|> #Total CO2 emissions and removals (kt), negitive values equal carbon removals
-        filter(`Land Use` %in% Land.Use)|>
+        filter(`Land Use` %in% c("4.B. Total cropland", "4.B.1. Cropland remaining cropland", "4.B.2. Land converted to cropland (12)"))|>
         mutate(`Land Use` = recode(`Land Use`, 
-                                   "B. Total Cropland" = "Total Cropland", # total area and total emissions
-                                   "1. Cropland remaining cropland" = "Remaining Cropland", # total area and emissions for land use remaining unchanged
-                                   "2. Land converted to cropland(10)" = "Conversion to Cropland"), # Total area and emissions from land use conversion
+                                   "4.B. Total cropland" = "Total Cropland", # total area and total emissions
+                                   "4.B.1. Cropland remaining cropland" = "Remaining Cropland", # total area and emissions for land use remaining unchanged
+                                   "4.B.2. Land converted to cropland (12)" = "Conversion to Cropland"), # Total area and emissions from land use conversion
                Total.Area.kha = as.numeric(Total.Area.kha),
                Emissions.kt = as.numeric(Emissions.kt ),
                t.ha = Emissions.kt/Total.Area.kha, #Emissions per hectare (Negitive values indicate net carbon sink) measured in t CO2/ha
@@ -829,11 +837,11 @@ for (i in CRF.2){
         rename(`Land Use` = 1,
                Total.Area.kha = 2, # Total Area measured in (kha)
                Emissions.kt= 3)|> #Total CO2 emissions and removals (kt), negitive values equal carbon removals
-        filter(`Land Use` %in% Land.Use)|>
+        filter(`Land Use` %in% c("4.C. Total grassland", "4.C.1. Grassland remaining grassland", "4.C.2. Land converted to grassland (11)"))|>
         mutate(`Land Use` = recode(`Land Use`, 
-                                   "C. Total grassland" = "Total Grassland", # total area and total emissions
-                                   "1. Grassland remaining grassland" = "Remaining Grassland", # total area and emissions for land use remaining unchanged
-                                   "2. Land converted to grassland(9)" = "Conversion to Grassland "), # Total area and emissions from land use conversion
+                                   "4.C. Total grassland" = "Total Grassland", # total area and total emissions
+                                   "4.C.1. Grassland remaining grassland" = "Remaining Grassland", # total area and emissions for land use remaining unchanged
+                                   "4.C.2. Land converted to grassland (11)" = "Conversion to Grassland "), # Total area and emissions from land use conversion
                Total.Area.kha = as.numeric(Total.Area.kha),
                Emissions.kt = as.numeric(Emissions.kt ),
                t.ha = Emissions.kt/Total.Area.kha, #Emissions per hectare (Negitive values indicate net carbon sink) measured in t CO2/ha
@@ -842,110 +850,11 @@ for (i in CRF.2){
         select(-`NIR Year`, -Ext)|>
         select(5,6,1,2,3,4)
       
-      Table.4  <- rbind(Table.4, x, y) # Table combining both Table 4.B and Table 4.C
-      
-      
-#-------------------------------------------------------------------------------#
-      
-# Table 3: Agriculture Summary
-
-#-------------------------------------------------------------------------------#
-# Table 3s1: Livestock emissions from enteric fermentation and Manure management  
-#-------------------------------------------------------------------------------#
-      x <- read_excel(i, sheet = "Table3s1", col_types = c("text","numeric", "numeric",
-                                                           "numeric","text", "text", "text"))|>
-        select(1,2,3,4)|>
-        rename(Category = 1,
-               CO2 = 2, #measured in kt
-               CH4 = 3, #measured in kt
-               N2O = 4)|> #measured in kt
-        filter(Category %in% c("3. Total agriculture",
-                               "A. Enteric fermentation",
-                               "B.  Manure management"))|>
-        mutate(File = i)
-#-------------------------------------------------------------------------------#
-# Table 3s2:  Emissions from other Ag Sources
-#-------------------------------------------------------------------------------#
-      y <- read_excel(i, sheet = "Table3s2",col_types = c("text","numeric", "numeric", "numeric", 
-                                                          "text", "text", "text"))|>
-        select(1,2,3,4)|>
-        rename(Category = 1,
-               CO2 = 2,
-               CH4 = 3, 
-               N2O = 4)|>
-        filter(Category %in% c("C.  Rice cultivation",
-                               "D.  Agricultural soils(2) (3) (4)",
-                               "E.  Prescribed burning of savannas",
-                               "F.  Field burning of agricultural residues",
-                               "G.  Liming",
-                               "H.  Urea application",
-                               "I.  Other carbon-containing fertilizers",
-                               "J.  Other (please specify)"))%>%
-        mutate(File = i)
-      
-      join<-rbind(x,y)|>
-        separate(File, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
-        select(-`NIR Year`, -Ext)|>
-        mutate(Year = as.integer(Year),
-               CO2 = ifelse(is.na(CO2),0,CO2), #measured in kt
-               CH4 = ifelse(is.na(CH4),0,CH4), #measured in kt
-               N2O = ifelse(is.na(N2O),0,N2O), #measured in kt
-               CO2eq.kt = CO2+(CH4*25)+(N2O*298), #measured in kt *** 100 GWP used, CH4 = 25, N2O = 298
-               Category = recode(Category,
-                                 "3. Total agriculture" = "Total Agriculture",
-                                 "A. Enteric fermentation" = "Enteric Fermentation",
-                                 "B.  Manure management" = "Manure Management", 
-                                 "C.  Rice cultivation" = "Rice cultivation", 
-                                 "D.  Agricultural soils(2) (3) (4)" = "Agricultural soils",
-                                 "E.  Prescribed burning of savannas" = "Prescribed Burning of Savannas",
-                                 "F.  Field burning of agricultural residues" = "Field Burning of Agricultural Residues",
-                                 "G.  Liming" = "Liming",
-                                 "H.  Urea application" = "Urea Application",
-                                 "I.  Other carbon-containing fertilizers" = "Other Carbon-containing Fertilizers",
-                                 "J.  Other (please specify)" = "Other Sources"))|>
-        select(5,6,1,2,3,4,7)
-      
-      Table.3 <-rbind(Table.3, join)
+      Table.4.2  <- rbind(Table.4.2, x, y) # Table combining both Table 4.B and Table 4.C
       
 #-------------------------------------------------------------------------------#
-# Cattle Specific Summary   
+# National Emissions Summary  
 #-------------------------------------------------------------------------------# 
-# Table 3s1: Cattle emissions from enteric fermentation and Manure management  
-#-------------------------------------------------------------------------------# 
-      
-      Names.2<-tolower(append(Names, c("I. Livestock", "A. Enteric fermentation", "1.   Cattle(1)", "B.  Manure management", "1.    Cattle(1)", "5. Indirect N2O emissions")))
-      
-      x <- read_excel(i, sheet = "Table3s1", col_types = c("text","numeric", "numeric",
-                                                           "numeric","text", "text", "text"))|>
-        select(1,2,3,4)|>
-        rename(Category = 1,
-               CO2 = 2,
-               CH4 = 3, 
-               N2O = 4)|>
-        mutate(Category = tolower(Category))|>
-        filter(Category %in% Names.2)|>
-        mutate(File = i)|>
-        separate(File, c("Country", "NIR Year", "Year", "Ext"), "[_.]")|>
-        select(-`NIR Year`, -Ext)|>
-        mutate(Year = as.integer(Year),
-               CO2 = ifelse(is.na(CO2),0,CO2), #measured in kt
-               CH4 = ifelse(is.na(CH4),0,CH4), #measured in kt
-               N2O = ifelse(is.na(N2O),0,N2O), #measured in kt
-               CO2eq.kt = CO2+(CH4*25)+(N2O*298), #measured in kt *** 100 GWP used, CH4 = 25, N2O = 298
-               Category = ifelse(Category == "i. livestock", "total livestock",
-                                 ifelse(Category == "a. enteric fermentation", "enteric fermentation",
-                                        ifelse(Category =="1.   cattle(1)", "cattle subtotal",
-                                               ifelse(Category == "b.  manure management", "manure management",
-                                                      ifelse(Category == "1.    cattle(1)", "cattle subtotal",
-                                                             ifelse(Category == "5. indirect n2o emissions","indirect n2o emissions", Category)))))),
-               EM.Source = ifelse(Category %in% c("total livestock", "enteric fermentation", "manure management"), "total",
-                                  ifelse(N2O == 0, "enteric fermentation", "manure management")))
-      
-      Table.3.Cattle<-rbind(Table.3.Cattle, x)
-      
-      #-------------------------------------------------------------------------------#
-      # National Emissions Summary  
-      #-------------------------------------------------------------------------------# 
       # Table Summary 2, values shown in kt CO2 eq for each source
       
       x<-read_excel(i,sheet = "Summary2", col_types = c("text","text", "text", "text", "text", "text", 
@@ -960,61 +869,35 @@ for (i in CRF.2){
         select(-`NIR Year`, -Ext)|>
         mutate(Year = as.numeric(Year))
       
-      National.Emissions<-rbind(National.Emissions, x)
+      National.Emissions.2<-rbind(National.Emissions.2, x)
+  }}
 
+#-------------------------------------------------------------------------------#
+# Joining CRF 1 and 2 Datasets
+#-------------------------------------------------------------------------------#
+Table.3.A<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_A_2023.csv")
+Table.3.B<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_B_2023.csv")
+Table.3.D<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
+Table.4<-read_csv("~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
+National.Emissions<-read_csv("~/Simpson Centre/NIR/02-Data/National_Emissions_2023.csv")
 
+Table.3.A<-rbind(Table.3.A, Table.3.A.2)
 
+# Table.3.B.2<-select(Table.3.B.2, -"Pit.Storage", -"Dry.Lot",-"Deep.Bedding") # Removing Additional categories, not used in analysis. 
 
+Table.3.B<-rbind(Table.3.B, Table.3.B.2)
 
+Table.3.D<-rbind(Table.3.D, Table.3.D.2)
 
+Table.4<-rbind(Table.4, Table.4.2)
 
+National.Emissions<-rbind(National.Emissions, National.Emissions.2)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+fwrite(National.Emissions, file = "~/Simpson Centre/NIR/02-Data/National_Emissions_2023.csv")
+fwrite(Table.3.A, file = "~/Simpson Centre/NIR/02-Data/Table_3_A_2023.csv")
+fwrite(Table.3.B, file = "~/Simpson Centre/NIR/02-Data/Table_3_B_2023.csv")
+fwrite(Table.3.D, file = "~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
+fwrite(Table.4, file = "~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
 
 #-------------------------------------------------------------------------------#
 
@@ -1150,18 +1033,176 @@ NIR_2023_Cattle<-full_join(Enteric, MM, by=c("Year" = "Year", "Country" = "Count
   
 fwrite(NIR_2023_Cattle, file = "~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle")                           
                            
+#-------------------------------------------------------------------------------#         
+# Crop and Land use Variables
+#-------------------------------------------------------------------------------#
+
+Table.3.D<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
+Table.4<-read_csv("~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")                         
                            
-                           
-                           
-                           
-                           
-                         
+### Fertilizer Emissions (Synthetic induced N2O emissions to CO2 emissions from Urea and carbon Containing fertilizers)
+
+F.EM.Direct <- Table.3.D|> filter(Emission.Source == "Inorganic N emissions")|>
+  select(-4,-9,-11)|>
+  rename(Direct.EM = Emissions.kt)|>
+  mutate(T.Frac.GAS = FracGASF*Application,
+         T.Frac.Leach = `FracLEACH-(H)`*Application)
+
+F.EM.Indirect<-Table.3.D|>
+  filter(Emission.Source %in% c("Atmospheric deposition", "leaching and run-off"))|>
+  select(1,2,3,6)|>
+  spread(Emission.Source, IEF)|>
+  rename(IEF.GAS = `Atmospheric deposition`,
+         IEF.Leach = `leaching and run-off`)
+
+F.EM <-full_join(F.EM.Direct, F.EM.Indirect)|>
+  mutate(EM.GAS = ((T.Frac.GAS*IEF.GAS)*(44/28))/10^6,
+         EM.Leach = ((T.Frac.Leach*IEF.Leach)*(44/28))/10^6,
+         N2O.EM = Direct.EM+EM.GAS+EM.Leach)
+
+F.CO2<-Table.3.D|>
+  filter(Emission.Source %in% c("Urea", "Other carbon-containing fertlizers"))|>
+  select(1,2,3,7)|>
+  mutate(Emissions.kt = ifelse(is.na(Emissions.kt),0,Emissions.kt))|>
+  spread(Emission.Source, Emissions.kt)
+
+F.EM<-full_join(F.EM, F.CO2)|>
+  mutate(Application = ifelse(Country == "AUS", Application*1000, Application), # AUS reported Application rate in Tonnes not kg
+         kt.CO2eq = N2O.EM*298 + `Other carbon-containing fertlizers` + Urea,
+         kg.CO2eq.kg.N = (kt.CO2eq*10^6)/Application)
+
+Land.Area<-Table.4|>
+  filter(`Land Use` == "Total Cropland")|>
+  select(1,2,4)
+
+F.EM<-full_join(F.EM,Land.Area)|>
+  mutate(EM.Ha = kt.CO2eq/Total.Area.kha)
+
+fwrite(F.EM, file = "~/Simpson Centre/NIR/02-Data/NIR_2023_Fertilizer.csv")
+
+#-------------------------------------------------------------------------------#
+#Crop Production Based Emissions
+#-------------------------------------------------------------------------------#
+Table.3.D<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
+Table.4<-read_csv("~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")              
+
+EM.Crop<-Table.3.D|>
+  select(1,2,3,7,11)|>
+  filter(Emission.Source %in% c("Direct N2O emissions", "Indirect N2O emissions", "Urea", "Other carbon-containing fertlizers"))|>
+  mutate(CO2eq = ifelse(Emission == "N2O", Emissions.kt*298, Emissions.kt),
+         CO2eq = ifelse(is.na(CO2eq),0,CO2eq))|>
+  group_by(Country, Year)|>
+  summarise(CO2eq = sum(CO2eq))
+
+
+EM.PRP<-Table.3.D|>
+  filter(Emission.Source %in% c("N from grazing animals"))|>
+  select(1,2,3,5,6,7,9,10)
+
+EM.PRP.Indirect<-Table.3.D|>
+  filter(Emission.Source %in% c("Atmospheric deposition","leaching and run-off"))|>
+  select(1,2,3,6)|>
+  spread(Emission.Source, IEF)
+
+EM.PRP<-full_join(EM.PRP, EM.PRP.Indirect)|>
+  select(-3)|>
+  rename(N = Application,
+         EF3.PRP = IEF,
+         EF4.NVOL = 8,
+         EF5.Leaching = 9,
+         FracLEACH = `FracLEACH-(H)`)|>
+  mutate(N = ifelse(Country == "AUS", N*1000, N),
+         EF3.PRP = ifelse(is.na(EF3.PRP), 0.004, EF3.PRP), # IPCC 2019 refinement aggregated default value:  TABLE 11.1
+         EF4.NVOL = ifelse(is.na(EF4.NVOL), 0.01, EF4.NVOL), # IPCC 2019 refinement aggregated default value:  TABLE 11.3
+         EF5.Leaching = ifelse(is.na(EF5.Leaching), 0.011, EF5.Leaching), # IPCC 2019 refinement aggregated default value:  TABLE 11.3
+         FracGASM = ifelse(is.na(FracGASM), 0.21, FracGASM), # IPCC 2019 refinement aggregated default value:  TABLE 11.3
+         FracLEACH = ifelse(is.na(FracLEACH), 0.24, FracLEACH),# IPCC 2019 refinement aggregated default value:  TABLE 11.3
+         N2O.GAS = ((N*FracGASM)*EF4.NVOL)*(44/28),
+         N2O.Leach = ((N*FracLEACH)*EF5.Leaching)*(44/28),
+         N2O.PRP = Emissions.kt+(N2O.GAS/10^6)+(N2O.Leach/10^6),
+         CO2.PRP = N2O.PRP*298)|>
+  select(Country, Year, N2O.PRP, CO2.PRP)
   
+EM.PRP[is.na(EM.PRP)]<-0
+
+EM.Crop<-full_join(EM.Crop, EM.PRP)|>
+  mutate(kt.CO2 = CO2eq-CO2.PRP)
+
+Land.Use<-Table.4|>
+  filter(`Land Use` == "Total Cropland")|>
+  select(1,2,4,5)|>
+  rename(Land.Use.EM = 4)
+
+EM.Crop<-full_join(EM.Crop, Land.Use)|>
+  mutate(Total.CO2eq = Land.Use.EM+kt.CO2,
+         Total.CO2eq.ha = Total.CO2eq/Total.Area.kha,
+         CO2eq.ha = kt.CO2/Total.Area.kha)
+
+fwrite(EM.Crop, file = "~/Simpson Centre/NIR/02-Data/NIR_2023_CropProduction.csv")  
+  
+#-------------------------------------------------------------------------------#
+# National Emission Trends + Intensity
+#-------------------------------------------------------------------------------# 
+
+Country.List<-c("AUS","AUT", "BEL", "BGR", "BLR", "CAN", "CHE", "CYP", "DNK",
+                "ESP", "EST", "EUA", "FIN", "GBR", "GRC","HRV", "HUN", "IRL",
+                "ISL", "ITA","JPN", "KAZ", "LIE","LTU", "LUX", "LVA", "MLT",
+                "NLD", "NOR","NZL", "POL", "PRT", "ROU", "RUS", "SVK", "SVN", 
+                "SWE", "TUR", "USA") 
 
 
 
+Emissions <- fread("~/Simpson Centre/NIR/02-Data/National_Emissions_2023.csv")
+
+Emissions.2005 <-filter(Emissions, Year == 2005)|>rename(CO2eq.2005 = 3)|>select(-2)
+
+Emissions<-full_join(Emissions,Emissions.2005)|>
+  mutate(d.2005 = ((CO2eq- CO2eq.2005)/CO2eq.2005)*100)
+
+GDP <- read_csv("~/Simpson Centre/NIR/02-Data/2022_CanSectorData/World_GDP.csv")|>
+  select(-1,-2,-3)|>
+  rename(Country = 1)|>
+  mutate(Country = ifelse(Country == "EUU", "EUA", Country))|>
+  filter(Country %in% Country.List)|>
+  gather(Year, GDP, 2:18)|>
+  mutate(Year = as.numeric(Year))
+
+Emissions<-full_join(Emissions, GDP)|>
+  filter(!is.na(GDP))|>
+  mutate(GDP = as.numeric(GDP),
+         t.CO2 = CO2eq*10^6,
+         EM.IN = (t.CO2/GDP)*10^6)
+
+fwrite(Emissions, file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")
+
+#-------------------------------------------------------------------------------#
+# Canadian Emissions
+#-------------------------------------------------------------------------------# 
+
+EM.Sector <- read_csv("~/Simpson Centre/NIR/02-Data/2023 Data/EN_GHG_Econ_Can_Prov_Terr.csv")
+
+Sector<-EM.Sector|>
+  filter(Region == "Canada",
+         Index %in% c(1,44,16,17,25,45,33,40,36))|>
+  select(-2,-5:-8,-10)|>
+  mutate(Sector = ifelse(Index %in% c(44,45,40), "Other", Source),
+         CO2eq = as.numeric(CO2eq))|>
+  group_by(Year, Sector)|>
+  summarise(Mt.CO2eq = sum(CO2eq))|>
+  filter(Year%in%c(2005,2010,2015,2019, 2020, 2021))
+
+Sector$Sector<-factor(Sector$Sector, levels = c("Oil and Gas", "Transport", "Buildings",
+                                                "Heavy Industry","Agriculture","Electricity",
+                                                "Other"))
 
 
+ggplot(Sector, aes(Year, Mt.CO2eq, color = Sector))+
+  geom_line(size = 1)+
+  geom_point(size = 4)+
+  scale_x_continuous(position = "top") +
+  theme_bw()+
+  theme(axis.ticks= element_blank())
+ggplot(Sector, aes(Year, Mt.CO2eq, color = Sector))+geom_line()
 
 
 
