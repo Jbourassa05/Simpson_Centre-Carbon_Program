@@ -1171,9 +1171,134 @@ Emissions<-full_join(Emissions, GDP)|>
   filter(!is.na(GDP))|>
   mutate(GDP = as.numeric(GDP),
          t.CO2 = CO2eq*10^6,
-         EM.IN = (t.CO2/GDP)*10^6)
+         EM.IN = t.CO2/(GDP))
 
 fwrite(Emissions, file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")
+
+
+
+Emissions <- read.csv(file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")|>
+  filter(!Country %in% c("LVA", "TUR", "SWE"))
+
+
+highlight<-c("CAN", "USA", "EUA", "AUS", "GBR", "RUS", "NZL", "JPN", "GRC")
+
+
+ggplot(subset(Emissions,Year %in% c(2005, 2010, 2015, 2019, 2020, 2021)),
+       aes(Year, d.2005, group = Country))+
+  geom_hline(yintercept = 0, linetype = "dashed", color = "#333333")+
+  geom_line(size = 1, alpha = 0.25, color = "#333333")+
+  geom_point(size = 2, alpha = .75, color = "#333333")+
+  geom_text_repel(data = subset(Emissions,Year == 2021 & Country %in% highlight), 
+                  aes(label = paste0(Country, ": ", round(d.2005,0), "%")),
+                  nudge_x = 0.5,
+                  direction = "y",
+                  hjust = "left", 
+                  size = 4,
+                  min.segment.length = unit(0, 'lines'),
+                  color = "#333333")+
+  scale_x_continuous(expand = expansion(mult = c(0.01,0.1)))+
+  scale_y_continuous(limits = c(-50,25))+
+  geom_line(data =subset(Emissions, Country %in% highlight & Year %in% c(2005, 2010, 2015, 2019, 2020, 2021)),
+            aes(Year, d.2005, color = Country),
+            size = 1.5)+
+  geom_point(data =subset(Emissions, Country %in% highlight & Year %in% c(2005, 2010, 2015, 2019, 2020, 2021)),
+             aes(Year, d.2005,fill = Country),
+             size = 4,
+             shape = 21)+
+  scale_fill_manual(values = c("#0B4151" ,"#511b0b","#005B64" ,"#007574" ,"#1D907F", "#48AA88", "#74C48E", "#A3DC96", "#D4F3A3"))+
+  scale_color_manual(values = c("#0B4151" ,"#511b0b","#005B64" ,"#007574", "#1D907F", "#48AA88", "#74C48E", "#A3DC96", "#D4F3A3"))+
+  theme_classic()+
+  theme(legend.position = "none")+
+  labs(title = "Change In National GHG Inventory Since 2005\n",
+       y = "Change in Emissions (%)",
+       x = "")
+  
+ggsave("C_International_Emissions.png", width = 12, height = 7, dpi = "retina")  
+
+
+
+
+
+
+
+Emissions <- read.csv(file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")|>
+  filter(!Country %in% c("LVA", "TUR", "SWE"))  
+
+ggplot(subset(Emissions,
+              Year %in% c(2005, 2010, 2015, 2019, 2020, 2021) &
+              !Country %in% c("KAZ","BLR","RUS","BGR","POL")),
+       aes(Year, EM.IN, group = Country))+
+  geom_line(size = 1, alpha = 0.25, color = "#333333")+
+  geom_point(size = 2, alpha = .75, color = "#333333")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
++
+  geom_text_repel(data = subset(Emissions,  
+                                Year == 2021
+                                & !Country %in% c("KAZ", "RUS", "POL")), 
+                  aes(label = paste0(Country, ": ", round(EM.IN,0), "%")),
+                  nudge_x = 0.5,
+                  direction = "y",
+                  hjust = "left", 
+                  size = 4,
+                  min.segment.length = unit(0, 'lines'),
+                  color = "#333333")+
+  geom_line(data =subset(Emissions, Country %in% highlight & Year %in% c(2005, 2010, 2015, 2019, 2020, 2021)http://127.0.0.1:25603/graphics/45f532f3-348f-47ff-bac3-2731d9f0de32.png),
+            aes(Year, EM.IN, color = Country),
+            size = 1.5)+
+  geom_point(data =subset(Emissions, Country %in% highlight & Year %in% c(2005, 2010, 2015, 2019, 2020, 2021)),
+             aes(Year, EM.IN,fill = Country),
+             size = 4,
+             shape = 21)+
+  scale_fill_manual(values = hcl.colors(5, palette = "Emrld"))+
+  scale_color_manual(values = hcl.colors(5, palette = "Emrld"))+
+  theme_classic()+
+  theme(legend.position = "none")+
+  scale_x_continuous(expand = expansion(mult = c(0.01,0.1)))+
+  labs(title = "Change In National GHG Inventory Since 2005\n",
+       y = "Change in Emissions (%)",
+       x = "")  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #-------------------------------------------------------------------------------#
 # Canadian Emissions
@@ -1181,30 +1306,157 @@ fwrite(Emissions, file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")
 
 EM.Sector <- read_csv("~/Simpson Centre/NIR/02-Data/2023 Data/EN_GHG_Econ_Can_Prov_Terr.csv")
 
+National.EM <- EM.Sector|>
+  filter(Region == "Canada",
+         Index == 0)|>
+  mutate(Year = as.numeric(Year))
+
 Sector<-EM.Sector|>
   filter(Region == "Canada",
-         Index %in% c(1,44,16,17,25,45,33,40,36))|>
+         Index %in% c(0,1,44,16,17,25,45,33,40,36))|>
   select(-2,-5:-8,-10)|>
-  mutate(Sector = ifelse(Index %in% c(44,45,40), "Other", Source),
+  mutate(Sector = ifelse(Index %in% c(44,45,40), "Other",
+                         ifelse(Index == 0, "National Inventory", Source)),
          CO2eq = as.numeric(CO2eq))|>
   group_by(Year, Sector)|>
   summarise(Mt.CO2eq = sum(CO2eq))|>
-  filter(Year%in%c(2005,2010,2015,2019, 2020, 2021))
+  ungroup()
 
-Sector$Sector<-factor(Sector$Sector, levels = c("Oil and Gas", "Transport", "Buildings",
+Sector$Sector<-factor(Sector$Sector, levels = c("National Inventory","Oil and Gas", "Transport", "Buildings",
                                                 "Heavy Industry","Agriculture","Electricity",
                                                 "Other"))
 
+Emrld.7<-hcl.colors(7, palette = "Emrld")
 
-ggplot(Sector, aes(Year, Mt.CO2eq, color = Sector))+
-  geom_line(size = 1)+
+
+ggplot(subset(Sector,Sector !="National Inventory"))+
+  geom_area(aes(Year, Mt.CO2eq, fill = Sector),alpha = 0.95)+
+  geom_line(data = National.EM, aes(x = Year, y = as.numeric(CO2eq)), size = 1, color = "#333333")+
+  geom_point(aes(x = 2021, y = 670.4276866), size = 5, color = "#333333",fill = "#D4F3A3" , shape = 21)+
+  geom_point(aes(x = 2005, y = 732.2187885), size = 5, color = "#333333",fill = "#D4F3A3", shape = 21)+
+  geom_hline(yintercept = 732.2187885*.6, color = "azure2", linetype = "dashed", size = 1)+
+  scale_fill_manual(values = Emrld.7)+
+  theme_classic()+
+  annotate(geom = "text", x = 2019, y = 672,
+           label = "Current Emissions:\n~670 Mt CO2eq ",
+           hjust = 0.5,
+           vjust = 1.5,
+           color = "azure2")+
+  annotate(geom = "text", x = 2005, y = 732.2187885,
+           label = "2005 Baseline:\n~732 Mt CO2 eq",
+           hjust = .5,
+           vjust = 1.5,
+           color = "azure2")+
+  annotate(geom = "text", x = 2005, y = 732.2187885*.6,
+           label = "eNDC Commitment: ~440 Mt CO2 eq",
+           hjust = .5,
+           vjust = -1.1,
+           color = "azure2")+
+  scale_x_continuous(breaks = seq(1990,2021,2),
+                    expand = expansion(mult = c(0,0.01)))+
+  scale_y_continuous(breaks = seq(0,800,100), 
+                     expand = expansion(mult = c(0.00,.05)))+
+  theme(legend.position = "bottom",
+        legend.title = element_blank())+
+  guides(fill = guide_legend(nrow = 1))+
+  labs(title = "Canadian GHG Emissions by Economic Sector\n",
+       y = "Emissions(Mt CO2 eq)",
+       x = "")
+  
+ggsave("National_Emissions.png", width = 12, height = 7, dpi = "retina")  
+
+Sector.2005<-Sector|>
+  filter(Year == 2005)|>
+  rename(CO2eq.2005 = Mt.CO2eq)|>
+  select(-1)
+Sector<-full_join(Sector, Sector.2005)|>
+  mutate(d.EM = (Mt.CO2eq-CO2eq.2005)/CO2eq.2005)
+
+ggplot(subset(Sector,Year >=2005), aes(Year, d.EM*100, color = Sector))+
+  geom_hline(yintercept = 0, linetype = "dashed")+
+  geom_line(aes(group=Sector), size = 2)+
   geom_point(size = 4)+
-  scale_x_continuous(position = "top") +
+  geom_hline(yintercept = -40, linetype = "dashed")+
+  annotate("text",x = 2005, y = -40, label = " eNDC Commitment: -40% by 2030",
+           hjust = 0,
+           vjust = -1)+
+  scale_x_continuous(breaks = seq(2005, 2020,5),
+                     expand = expansion(mult = c(0.05,0.23)))+
+  scale_y_continuous(breaks = seq(-60,30,10))+
+  theme_classic()+
+  theme(legend.position = "none")+
+  scale_color_manual(values = c("#511b0b", Emrld.7))+
+  geom_text_repel(data = subset(Sector, Year == 2021), 
+                  aes(label = paste0(Sector, ": ", round(d.EM*100,0), "%")) , 
+                  hjust = -.1, 
+                  fontface = "bold", 
+                  size = 4,
+                  color = "#333333")+
+  labs(title = "Change in GHG Emissions by Economic Sector\n",
+       x = "",
+       y = "Change in Emissions (%)")
+  
+ggsave("C_National_Emissions.png", width = 12, height = 7, dpi = "retina")  
+
+
+  
+  
+  
+  
+  
+
+
+  
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+ggplot(subset(Sector,Year >= 2005))+
+  geom_hline(yintercept = 0, size = 1, color = "#333333", linetype = "dashed")+
+  geom_line(aes(Year, d.EM*100, color = Sector), size = 1, alpha = 0.8)+
+  geom_point(aes(Year, d.EM*100, fill = Sector), size = 4, shape = 21)+
+  geom_hline(yintercept = -40, color = "#333333", linetype = "dashed", size = 1)+
+  scale_color_manual(values = Class.8)+
+  scale_fill_manual(values = Class.8)+
   theme_bw()+
-  theme(axis.ticks= element_blank())
-ggplot(Sector, aes(Year, Mt.CO2eq, color = Sector))+geom_line()
+  annotate(geom = "text", x = 2005, y = -40,
+           label = " eNDC Commitment: 40% reduction",
+           hjust = 0,
+           vjust = -1.,
+           color = "#333333")+
+  scale_x_continuous(breaks = seq(2005,2021,2),
+                     expand = expansion(mult = c(0.01,0.01)))+
+  scale_y_continuous(breaks = seq(-60,30,10), 
+                     expand = expansion(mult = c(0.01,.05)))+
+  theme(legend.position = "bottom",
+        legend.title = element_blank())+
+  guides(fill = guide_legend(nrow = 1))+
+  labs(title = "Change in Canadian GHG Emissions Since 2005",
+       y = "Percent Change (%)",
+       x = "")
+  
+ggsave("C_National_Emissions.png", width = 12, height = 7, dpi = "retina")
 
 
-
-
+ggplot(subset(Sector,Year %in% c(2021)))+
+  geom_col(aes(Sector, d.EM*100, fill = Sector), position = "dodge", width = 0.95, color = "#333333")+
+  geom_hline(yintercept = 0, size = 1, color = "#333333")+
+  scale_fill_manual(values = Class.8)|>
+  
 
