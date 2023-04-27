@@ -16,6 +16,8 @@
 library(tidyverse)
 library(data.table)
 library(readxl)
+library(ggrepel)
+
 
 #-------------------------------------------------------------------------------#
 
@@ -28,13 +30,13 @@ library(readxl)
 
 setwd("~/Simpson Centre/NIR/2023 CRF Tables") # Will need to be reset for working directory ***
 
-# 2023 NIR as of 04/20/2023 missing Germany, France, Czechia, and Ukraine, Country list includes EU average (EUA)
+# 2023 NIR as of 04/26/2023 missing Ukraine, Country list includes EU average (EUA)
 
 CRF.1 <-c("AUT", "BEL", "BGR", "BLR", "CAN", "CHE", "CYP", "DNK",
           "ESP", "EST", "EUA", "FIN", "GBR", "GRC","HRV", "HUN", "IRL",
           "ISL", "ITA","JPN", "KAZ", "LIE","LTU", "LUX", "LVA", "MLT",
           "NLD", "NOR","NZL", "POL", "PRT", "ROU", "RUS", "SVK", "SVN", 
-          "SWE", "TUR", "USA") 
+          "SWE", "TUR", "USA", "DEU", "FRA", "CZE") 
 
 # MCO was removed due to lack of Ag emissions
                 
@@ -881,9 +883,12 @@ Table.3.D<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
 Table.4<-read_csv("~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
 National.Emissions<-read_csv("~/Simpson Centre/NIR/02-Data/National_Emissions_2023.csv")
 
+
+Table.3.A.2<-mutate(Table.3.A.2, Year = as.numeric(Year))
+
 Table.3.A<-rbind(Table.3.A, Table.3.A.2)
 
-# Table.3.B.2<-select(Table.3.B.2, -"Pit.Storage", -"Dry.Lot",-"Deep.Bedding") # Removing Additional categories, not used in analysis. 
+Table.3.B.2<-select(Table.3.B.2, -"Pit.Storage", -"Dry.Lot",-"Deep.Bedding") # Removing Additional categories, not used in analysis. 
 
 Table.3.B<-rbind(Table.3.B, Table.3.B.2)
 
@@ -1031,7 +1036,7 @@ NIR_2023_Cattle<-full_join(Enteric, MM, by=c("Year" = "Year", "Country" = "Count
          `EM/kg` = `kg.CO2.eq/head`/Weight,
          `EM/kg.Milk` = `head/day`/`Milk Yield`)
   
-fwrite(NIR_2023_Cattle, file = "~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle")                           
+fwrite(NIR_2023_Cattle, file = "~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle.csv")                           
                            
 #-------------------------------------------------------------------------------#         
 # Crop and Land use Variables
@@ -1042,10 +1047,19 @@ Table.4<-read_csv("~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
                            
 ### Fertilizer Emissions (Synthetic induced N2O emissions to CO2 emissions from Urea and carbon Containing fertilizers)
 
-F.EM.Direct <- Table.3.D|> filter(Emission.Source == "Inorganic N emissions")|>
-  select(-4,-9,-11)|>
+Table.3.D<-Table.3.D|>
+  mutate(FracGASF = ifelse(is.na(FracGASF) & Emission == "N2O", 0.11, FracGASF),
+         FracGASM = ifelse(is.na(FracGASM ) & Emission == "N2O", 0.21, FracGASM),
+         `FracLEACH-(H)` = ifelse(is.na(`FracLEACH-(H)`) & Emission == "N2O", 0.21, FracGASM))
+
+fwrite(Table.3.D, file = "~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
+Table.3.D<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
+
+F.EM.Direct <- Table.3.D|> 
+  filter(Emission.Source %in% c("Inorganic N emissions", "Organic N emissions"))|>
+  select(-4,-11)|>
   rename(Direct.EM = Emissions.kt)|>
-  mutate(T.Frac.GAS = FracGASF*Application,
+  mutate(T.Frac.GAS = ifelse( Emission.Source == "Inorganic N emissions", FracGASF*Application,FracGASM*Application),
          T.Frac.Leach = `FracLEACH-(H)`*Application)
 
 F.EM.Indirect<-Table.3.D|>
@@ -1067,7 +1081,9 @@ F.CO2<-Table.3.D|>
   spread(Emission.Source, Emissions.kt)
 
 F.EM<-full_join(F.EM, F.CO2)|>
-  mutate(Application = ifelse(Country == "AUS", Application*1000, Application), # AUS reported Application rate in Tonnes not kg
+  mutate(`Other carbon-containing fertlizers` = ifelse(Emission.Source == "Organic N emissions", 0, `Other carbon-containing fertlizers`),
+         Urea = ifelse(Emission.Source == "Organic N emissions", 0, Urea),
+         Application = ifelse(Country == "AUS", Application*1000, Application), # AUS reported Application rate in Tonnes not kg
          kt.CO2eq = N2O.EM*298 + `Other carbon-containing fertlizers` + Urea,
          kg.CO2eq.kg.N = (kt.CO2eq*10^6)/Application)
 
@@ -1148,7 +1164,7 @@ Country.List<-c("AUS","AUT", "BEL", "BGR", "BLR", "CAN", "CHE", "CYP", "DNK",
                 "ESP", "EST", "EUA", "FIN", "GBR", "GRC","HRV", "HUN", "IRL",
                 "ISL", "ITA","JPN", "KAZ", "LIE","LTU", "LUX", "LVA", "MLT",
                 "NLD", "NOR","NZL", "POL", "PRT", "ROU", "RUS", "SVK", "SVN", 
-                "SWE", "TUR", "USA") 
+                "SWE", "TUR", "USA", "DEU", "FRA", "CZE") 
 
 
 
@@ -1205,23 +1221,25 @@ ggplot(Emissions,aes(Country, d.2005))+
             aes(x = Country, d.2005-1,
                 label = paste0(Country, ": ", round(d.2005,0), "%")),
             hjust = "left", 
-            angle = -90)+
+            angle = -90,
+            size = 4, 
+            fontface = "bold")+
   geom_text(data = subset(Emissions, d.2005 > 0),
-            aes(x = Country, y = -1, label = paste0(Country, ": ", round(d.2005,0), "%")),
+            aes(x = Country, y = d.2005+1, label = paste0(Country, ": ", round(d.2005,0), "%")),
             hjust= "left",
-            angle = -90)+
+            angle = 90,
+            size = 4, 
+            fontface = "bold")+
   scale_y_continuous(breaks = seq(-60,30,10),
                      expand = expansion(mult = c(0.15, 0.15)))+
   geom_point(data = subset(Emissions, Country %in% highlight), aes(Country, d.2005),
-             size = 4, fill = "#750001", color = "#333333", shape = 21)
+             size = 4, fill = "red", color = "#333333", shape = 21)
   
-ggsave("C_International_Emissions.png", width = 12, height = 7, dpi = "retina")  
+ggsave("~/Simpson Centre/NIR/02-Data/C_International_Emissions.png", width = 12, height = 7, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
 ## Emission Intensity Figure
 #-------------------------------------------------------------------------------#
-
-
 
 Emissions <- read.csv(file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")|>
   filter(Year %in% c(2005, 2021),
@@ -1277,7 +1295,7 @@ ggplot(Emissions,aes(Year,EM.IN,group = Country))+
   scale_y_continuous(expand =  expansion(mult = c(0.15, 0.15)))
   
   
-ggsave("C_International_Emission_IN.png", width = 12, height = 7, dpi = "retina")  
+ggsave("~/Simpson Centre/NIR/02-Data/C_International_Emission_IN.png", width = 12, height = 7, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
 ## National Emissions ----
@@ -1616,7 +1634,8 @@ CropProduction <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_CropProduction
 Fertilizer <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_Fertilizer.csv")
 
 Fert <- Fertilizer|>
-  filter(Year == 2021)|>
+  filter(Year == 2021,
+         Emission.Source == "Inorganic N emissions")|>
   mutate(Country.Lab = Country,
          Country = reorder(Country, kg.CO2eq.kg.N),
          highlight = ifelse(Country.Lab %in% c("AUS", "JPN", "CAN", "EUA", "USA", "RUS", "KAZ"), T, F))
