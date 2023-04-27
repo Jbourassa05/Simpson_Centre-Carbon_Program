@@ -1508,6 +1508,35 @@ ggplot(Ag.Sector, aes(x = Year, y = as.numeric(CO2eq)))+
 ggsave("Ag_Emissions.png", width = 12, height = 7, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
+# Emission Source
+#-------------------------------------------------------------------------------#
+
+
+Animal.Production<-Ag.Sector|>
+  filter(Year == 2021,
+         Sector == "Animal Production")
+
+Cattle.Can<- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle.csv")|>
+  filter(Country == "CAN",
+         Year == 2021)|>
+  select(1,5,12:16)|>
+  mutate(Total.EM = (EM.CH4*25)+(CH4.MM*25)+(N2O.MM*298)+(Indirect.N2O*298)+(PRP.N2O*298)+(PRP.Ind*298),
+         `Enteric Fermentation` = (EM.CH4*25),
+         `Managed Manure` = (CH4.MM*25)+(N2O.MM*298)+(Indirect.N2O*298),
+         `Unmanaged Manure` = (PRP.N2O*298)+(PRP.Ind*298))|>
+  select(1,8:11)
+
+
+Other.Livestock <- c("Other Livestock", , 1055.762145, 2873.547889, )
+
+
+
+
+
+
+
+
+#-------------------------------------------------------------------------------#
 install.packages("tidytext")
 library(tidytext)
 
@@ -1775,15 +1804,20 @@ CP <- CropProduction|>
   filter(Rank <= 25)|>
   mutate(Country.Lab = Country,
          Country = reorder(Country, CO2eq.ha),
-         highlight = ifelse(Country.Lab %in% c("AUS", "JPN", "CAN", "EUA", "USA", "RUS", "KAZ"), T, F))
+         highlight = ifelse(Country.Lab %in% c("AUS", "JPN", "CAN", "EUA", "USA", "RUS", "KAZ"), T, F),
+         LULUC = ifelse(CO2eq.ha>Total.CO2eq.ha, "Sink", "Source"))
 
 
 ggplot(CP, aes(Country, CO2eq.ha, color = highlight, fill = highlight))+
   geom_hline(yintercept = 0, color = "#333333", linetype = "dashed")+
   #geom_col(color = "#333333", fill = "#007574")+
-  geom_segment(aes(x = Country, xend = Country, y = CO2eq.ha, yend = Total.CO2eq.ha), size = 1)+
-  geom_point(aes(x = Country, y = CO2eq.ha), size = 2,  color = "#333333", shape = 24)+
-  geom_point(aes(x = Country, y = Total.CO2eq.ha), size = 2, color = "#333333", shape = 25)+
+  geom_segment(aes(x = Country, xend = Country, y = CO2eq.ha, yend = Total.CO2eq.ha), size = 2)+
+  geom_point(aes(x = Country, y = CO2eq.ha), size = 4,  color = "#333333", shape = 21)+
+  geom_point(aes(x = Country, y = Total.CO2eq.ha, shape = LULUC), size = 4, color = "#333333")+
+  scale_fill_manual(values = c("#004C54", "red"))+
+  scale_color_manual(values = c("#004C54", "red"))+
+  scale_shape_manual(Values = c(24,25))+
+  theme(legend.position = "none")
   
   #geom_col(data = subset(CP, highlight == T,), aes(x = Country, y = CO2eq.ha),
   #         color = "#333333", fill = "red")+
