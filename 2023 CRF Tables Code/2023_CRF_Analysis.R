@@ -1198,42 +1198,51 @@ fwrite(Emissions, file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")
 Emissions <- read.csv(file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")|>
   filter(Year == 2021,
          !Country %in% c("SWE", "TUR", "LVA"))|>
-  mutate(Country = fct_reorder(Country, d.2005))
+  mutate(Rank = rank(-CO2eq))|>
+  filter(Rank <=25)|>
+  mutate(Country = fct_reorder(Country, d.2005),
+         highlight = ifelse(Country %in% c("CAN", "USA", "EUA", "AUS", "RUS", "JPN"), T, F))
 
-
-highlight<-c("CAN", "USA", "EUA", "AUS", "GBR", "RUS", "NZL", "JPN")
-
-
-ggplot(Emissions,aes(Country, d.2005))+
+ggplot(Emissions,aes(Country, d.2005, color = highlight, fill = highlight))+
   geom_hline(yintercept = 0, color = "#333333", linetype = "dashed")+
-  geom_segment(aes(x = Country, xend = Country, y = 0, yend = d.2005),  color = "#333333")+
-  geom_point(size = 4, fill = "#007574", color = "#333333", shape = 21)+
+  #geom_segment(aes(x = Country, xend = Country, y = 0, yend = d.2005),  color = "#333333")+
+  #geom_point(size = 4, fill = "#007574", color = "#333333", shape = 21)+
+  geom_col(color = "#333333", alpha = 0.95)+
   theme_light()+
   labs(title = "Change In National GHG Inventory Since 2005\n",
        x = "",
        y = "Change in Emissions (%)")+
   theme(
+    legend.position = "none",
     panel.grid.major.x = element_blank(),
     panel.border = element_blank(),
     axis.ticks.x = element_blank(),
     axis.text.x=element_blank())+
   geom_text(data = subset(Emissions, d.2005 <= 0),
             aes(x = Country, d.2005-1,
-                label = paste0(Country, ": ", round(d.2005,0), "%")),
-            hjust = "left", 
-            angle = -90,
+                label = paste0(round(d.2005,0), "%")),
+            size = 4, 
+            fontface = "bold")+
+  geom_text(data = subset(Emissions, d.2005 <= 0),
+            aes(x = Country, 1,
+                label = paste0(Country)),
             size = 4, 
             fontface = "bold")+
   geom_text(data = subset(Emissions, d.2005 > 0),
-            aes(x = Country, y = d.2005+1, label = paste0(Country, ": ", round(d.2005,0), "%")),
-            hjust= "left",
-            angle = 90,
+            aes(x = Country, d.2005+1,
+                label = paste0(round(d.2005,0), "%")),
             size = 4, 
             fontface = "bold")+
+  geom_text(data = subset(Emissions, d.2005 > 0),
+            aes(x = Country, -1,
+                label = paste0(Country)),
+            size = 4, 
+            fontface = "bold")+
+  scale_fill_manual(values = c("#004C54", "red"))+
+  scale_color_manual(values = c("#004C54", "red"))
   scale_y_continuous(breaks = seq(-60,30,10),
-                     expand = expansion(mult = c(0.15, 0.15)))+
-  geom_point(data = subset(Emissions, Country %in% highlight), aes(Country, d.2005),
-             size = 4, fill = "red", color = "#333333", shape = 21)
+                     expand = expansion(mult = c(0.15, 0.15)))
+
   
 ggsave("~/Simpson Centre/NIR/02-Data/C_International_Emissions.png", width = 12, height = 7, dpi = "retina")  
 
@@ -1242,23 +1251,34 @@ ggsave("~/Simpson Centre/NIR/02-Data/C_International_Emissions.png", width = 12,
 #-------------------------------------------------------------------------------#
 
 Emissions <- read.csv(file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")|>
-  filter(Year %in% c(2005, 2021),
-         !Country %in% c("KAZ","BLR","RUS","BGR","POL"))|>
+  filter(Year %in% c(2005, 2021))|>
+         #!Country %in% c("KAZ","BLR","RUS","BGR","POL"))|>
+  group_by(Year)|>
+  mutate(Rank = rank(-CO2eq))|>
+  ungroup()
+
+EM.List<-filter(Emissions, Year == 2021 & Rank <=21)|>select(Country)
+EM.List<-c(EM.List$Country)
+
+Emissions<- filter(Emissions, Country %in% EM.List)|>
   mutate(Year = as.factor(Year),
-         highlight = ifelse(Country %in% c("CAN", "USA", "EUA", "AUS", "GBR", "NZL", "JPN"), T, F))
+         highlight = ifelse(Country %in% c("CAN", "USA", "EUA", "AUS", "DEU", "JPN"), T, F))
 
 
 
 
-ggplot(Emissions,aes(Year,EM.IN,group = Country))+
-  geom_path(alpha = 0.5, color = "#333333")+
-  geom_point(size = 4, shape = 21, color = "#333333", fill = "#007574")+
+
+ggplot(Emissions,aes(Year,EM.IN, group = Country, color = highlight))+
+  geom_path(alpha = 0.5, size = 1)+
+  geom_point(size = 4, alpha = .75)+
   geom_path(data = subset(Emissions, highlight == T), 
             aes(Year,EM.IN,group = Country),
-            size = 1, color = "#333333")+
+            size = 1,
+            alpha = 0.5)+
   geom_point(data = subset(Emissions, highlight == T), 
              aes(Year,EM.IN,group = Country),
-             size = 4, shape = 21, color = "#333333", fill = "red")+
+             size = 4,
+             alpha = .75)+
   geom_text_repel(data = subset(Emissions, Year == 2005),
                   aes(x = Year, y = EM.IN,  color = highlight,
                       label = paste0(Country, ": ", round(EM.IN,0), " t/$M")),
@@ -1279,7 +1299,7 @@ ggplot(Emissions,aes(Year,EM.IN,group = Country))+
                   segment.size = 0.2,
                   fontface = "bold", 
                   size = 4)+
-  scale_color_manual(values = c("#333333", "red"))+
+  scale_color_manual(values = c("#004C54", "red"))+
   labs(title = "International Comparison of Emission Intensities from 2005 to 2021",
        subtitle = "Measured in Tonnes CO2eq per Million Dollars GDP (2015 Constant Dollar USD)",
        x = "",
@@ -1292,7 +1312,7 @@ ggplot(Emissions,aes(Year,EM.IN,group = Country))+
         axis.ticks.y = element_blank(),
         axis.text.y=element_blank())+
   scale_x_discrete(position  = "top")+
-  scale_y_continuous(expand =  expansion(mult = c(0.15, 0.15)))
+  scale_y_continuous(limits = c(-500, 1500), expand =  expansion(mult = c(0, 0.20)))
   
   
 ggsave("~/Simpson Centre/NIR/02-Data/C_International_Emission_IN.png", width = 12, height = 7, dpi = "retina")  
@@ -1364,7 +1384,7 @@ ggplot(subset(Sector,Sector !="National Inventory"))+
        y = "Emissions(Mt CO2 eq)",
        x = "")
   
-ggsave("National_Emissions.png", width = 12, height = 7, dpi = "retina")  
+ggsave("~/Simpson Centre/NIR/02-Data/National_Emissions.png", width = 12, height = 7, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
 # Change in National Emissions
@@ -1397,11 +1417,12 @@ ggplot(subset(Sector,Year >=2005), aes(Year, d.EM*100, color = Sector))+
                   fontface = "bold", 
                   size = 4,
                   color = "#333333")+
-  labs(title = "Change in GHG Emissions by Economic Sector\n",
+  labs(title = "Change in GHG Emissions by Economic Sector",
+       subtitle = "Change in Total CO2eq emissions excluding LULUCF",
        x = "",
        y = "Change in Emissions (%)")
   
-ggsave("C_National_Emissions.png", width = 12, height = 7, dpi = "retina")  
+ggsave("~/Simpson Centre/NIR/02-Data/C_National_Emissions.png", width = 12, height = 7, dpi = "retina")  
 
 
 #-------------------------------------------------------------------------------#
@@ -1486,7 +1507,6 @@ ggplot(Ag.Sector, aes(x = Year, y = as.numeric(CO2eq)))+
   
 ggsave("Ag_Emissions.png", width = 12, height = 7, dpi = "retina")  
 
-
 #-------------------------------------------------------------------------------#
 install.packages("tidytext")
 library(tidytext)
@@ -1496,6 +1516,10 @@ Cattle <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle.csv")
 
 Cattle.Int <- Cattle|>
   filter(Year %in% c(2021))|>
+  group_by(Type.A)|>
+  mutate(Rank = rank(-`Total Emissions kt.CO2.eq`))|>
+  ungroup()|>
+  filter(Rank <= 25)|>
   mutate(Country.Lab = Country,
          Country = reorder_within(Country,`kg.CO2.eq/head`, Type.A ),
          IEF = `kg.CO2.eq/head`/1000,
@@ -1534,31 +1558,42 @@ ggplot(Cattle.Int, aes(Country, IEF))+
   scale_y_continuous(expand = expansion(mult = c(0, 0.15)))+
   scale_x_discrete(expand = expansion(mult = c(0.05, 0.05)))
 
-ggsave("Cattle_IEF.png", width = 12, height = 7, dpi = "retina")  
+ggsave("~/Simpson Centre/NIR/02-Data/Cattle_IEF.png", width = 12, height = 7, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
 ## Intensity EM/mcal
 #-------------------------------------------------------------------------------#
   
 Cattle.Int <- Cattle|>
-  filter(Year %in% c(2021))|>
+  filter(Year %in% c(2021),
+         Country != "JPN")|>
+  group_by(Type.A)|>
+  mutate(Rank = rank(-`Total Emissions kt.CO2.eq`))|>
+  ungroup()|>
+  filter(Rank <= 25)|>
   mutate(Country.Lab = Country,
          Country = reorder_within(Country,`EM/Mcal`, Type.A),
-         highlight = ifelse(Country.Lab %in% c("NZL", "AUS", "EUA", "GBR", "JPN", "NLD", "CAN", "USA"), T, F))
+         highlight = ifelse(Country.Lab %in% c("NZL", "AUS", "EUA", "GBR", "NLD", "CAN", "USA"), T, F))
 
 ggplot(Cattle.Int, aes(Country, `EM/Mcal`))+
-  geom_segment(aes(x = Country, xend = Country, y = 0, yend = `EM/Mcal`), color = "#333333")+
-  geom_point(size = 4, color = "#333333", fill = "#007574", shape = 21)+
-  geom_point(data = subset(Cattle.Int, highlight == T,), aes(x = Country, y = `EM/Mcal`),
-             size = 4, color = "#333333", fill = "red", shape = 21)+
+  geom_col(aes(fill = highlight))+
+  #geom_segment(aes(x = Country, xend = Country, y = 0, yend = `EM/Mcal`), color = "#333333")+
+  #geom_point(size = 4, color = "#333333", fill = "#007574", shape = 21)+
+  #geom_point(data = subset(Cattle.Int, highlight == T,), aes(x = Country, y = `EM/Mcal`),
+  #           size = 4, color = "#333333", fill = "red", shape = 21)+
   geom_hline(yintercept = 0, color = "#333333", linetype = "dashed")+
-  geom_text(data = Cattle.Int,
+  geom_text(data = subset(Cattle.Int, highlight == T),
             aes(x = Country,
                 y = `EM/Mcal`,
-                label = paste0("  ",Country.Lab),
+                label = paste0(round(`EM/Mcal`,3)),
                 color = highlight),
-            hjust = "left",
-            angle = 65)+
+            vjust = -.5)+
+  geom_text(data = Cattle.Int,
+            aes(x = Country,
+                y = 0,
+                label = paste0(Country.Lab),
+                color = highlight),
+            vjust = 1.2)+
   labs(title = "Emission Intensity: Average Emissions per Mcal Consumed",
        subtitle = "Measured in kg CO2eq/Mcal",
        x = "",
@@ -1573,12 +1608,13 @@ ggplot(Cattle.Int, aes(Country, `EM/Mcal`))+
         strip.text = element_text(color = "black",
                                   face = "bold",
                                   size = 10))+
-  scale_color_manual(values = c("#333333", "red"))+
+  scale_fill_manual(values = c("#004C54", "red"))+
+  scale_color_manual(values = c("#004C54", "red"))+
   facet_wrap(~Type.A, scales = "free", nrow = 2,)+
-  scale_y_continuous(expand = expansion(mult = c(0, 0.2)))+
+  scale_y_continuous(expand = expansion(mult = c(0.1, 0.2)))+
   scale_x_discrete(expand = expansion(mult = c(0.05, 0.05)))
 
-ggsave("Cattle_Mcal.png", width = 12, height = 7, dpi = "retina")  
+ggsave("~/Simpson Centre/NIR/02-Data/Cattle_Mcal.png", width = 12, height = 7, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
 ## Intensity EM/kg Milk
@@ -1734,19 +1770,25 @@ CropProduction <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_CropProduction
 
 CP <- CropProduction|>
   filter(Year == 2021)|>
+  filter(Total.CO2eq.ha<=10)|>
+  mutate(Rank = rank(-kt.CO2))|>
+  filter(Rank <= 25)|>
   mutate(Country.Lab = Country,
          Country = reorder(Country, CO2eq.ha),
          highlight = ifelse(Country.Lab %in% c("AUS", "JPN", "CAN", "EUA", "USA", "RUS", "KAZ"), T, F))
 
 
-ggplot(CP, aes(Country, CO2eq.ha))+
+ggplot(CP, aes(Country, CO2eq.ha, color = highlight, fill = highlight))+
   geom_hline(yintercept = 0, color = "#333333", linetype = "dashed")+
-  geom_col(color = "#333333", fill = "#007574")+
-  geom_point(aes(x = Country, y = Total.CO2eq.ha), size = 2, fill = "#007574", color = "#333333", shape = 21)+
-  geom_col(data = subset(CP, highlight == T,), aes(x = Country, y = CO2eq.ha),
-           color = "#333333", fill = "red")+
-  geom_point(data = subset(CP, highlight == T,), aes(x = Country, y = Total.CO2eq.ha),
-             size = 2, fill = "red", color = "#333333", shape = 21)+
+  #geom_col(color = "#333333", fill = "#007574")+
+  geom_segment(aes(x = Country, xend = Country, y = CO2eq.ha, yend = Total.CO2eq.ha), size = 1)+
+  geom_point(aes(x = Country, y = CO2eq.ha), size = 2,  color = "#333333", shape = 24)+
+  geom_point(aes(x = Country, y = Total.CO2eq.ha), size = 2, color = "#333333", shape = 25)+
+  
+  #geom_col(data = subset(CP, highlight == T,), aes(x = Country, y = CO2eq.ha),
+  #         color = "#333333", fill = "red")+
+  #geom_point(data = subset(CP, highlight == T,), aes(x = Country, y = Total.CO2eq.ha),
+  #           size = 2, fill = "red", color = "#333333", shape = 21)+
   labs(title = "Emission Intensity: Average Emissions per Hectare of Cropland",
        subtitle = "Measured in t CO2eq/ha, Points Indicade Net Emissions With Carbon Removals",
        x = "",
