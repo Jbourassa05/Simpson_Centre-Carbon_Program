@@ -1,6 +1,7 @@
 #-------------------------------------------------------------------------------#
 
 # 2023 NIR DATA -Data used in "Canada’s 2023 National Inventory Submission" webinar on May 2, 2023
+
 # Webinar link: 
 
 # by: Joshua Bourassa
@@ -17,7 +18,6 @@ library(tidyverse)
 library(data.table)
 library(readxl)
 library(ggrepel)
-
 
 #-------------------------------------------------------------------------------#
 
@@ -44,8 +44,6 @@ CRF.1 <-c("AUT", "BEL", "BGR", "BLR", "CAN", "CHE", "CYP", "DNK",
 
 CRF.2 <-c("AUS")
 
-
-
 #-------------------------------------------------------------------------------#
 ## CRF Type 1 Extraction ----
 #-------------------------------------------------------------------------------#
@@ -64,12 +62,6 @@ Cattle<-unique(tolower(c("Dairy cattle(4)", "Dairy cattle(3)", "Non-dairy cattle
                          "Non-dairy Young Cattle (1-2 years)", "Dairy cows", "Other cows", "Steer Stocker", "Heifer Stocker", "Beef Cows",
                          "Dairy Replacements", "Beef Replacements", "Steer Feedlot", "Heifer Feedlot",  
                          "Dairy Cows", "Beef Calves", "Dairy Calves", "Dairy cattle(4)", "Non-dairy Cattle"))) 
-
-
-
-
-
-
 
 # Ag Soils used in Table 3.D
                             
@@ -539,6 +531,7 @@ fwrite(Table.4, file = "~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
 #-------------------------------------------------------------------------------#
 
 ## CRF Type 2 Loop ----
+
 #-------------------------------------------------------------------------------# 
 
 CRF.2 <-c("AUS")
@@ -990,9 +983,10 @@ Table.3.D<-full_join(Table.3.D, Table.3.D.Indirect)|>
 
 MM<-full_join(Table.3.B, Table.3.D)|>
   mutate(PRP.N2O = ((N.Pasture*EF3.PRP)*(44/28))/10^6, # See Equation 11.1 in 2019 Refinement N2O-N_prp
-         PRP.Ind = ((((N.Pasture*FracGASM)*EF4.NVOL)+((N.Pasture*FracLEACH)*EF5.Leaching))*44/28)/10^6, # See Equation 11.10 and 11.11 in 2019 Refinement
-         EM.MM = (CH4.MM*25) + ((N2O.MM+PRP.N2O+PRP.Ind+Indirect.N2O)*298))|>
-  select(-8:-12)
+         PRP.Vol = (((N.Pasture*FracGASM)*EF4.NVOL)*(44/28))/10^6,
+         PRP.Leach = (((N.Pasture*FracLEACH)*EF5.Leaching)*(44/28))/10^6,
+         PRP.Ind = PRP.Vol+PRP.Leach, # See Equation 11.10 and 11.11 in 2019 Refinement
+         EM.MM = (CH4.MM*25) + ((N2O.MM+PRP.N2O+PRP.Ind+Indirect.N2O)*298))
 
 ## Enteric Methane Emissions
 
@@ -1048,11 +1042,12 @@ Table.4<-read_csv("~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
 ### Fertilizer Emissions (Synthetic induced N2O emissions to CO2 emissions from Urea and carbon Containing fertilizers)
 
 Table.3.D<-Table.3.D|>
-  mutate(FracGASF = ifelse(is.na(FracGASF) & Emission == "N2O", 0.11, FracGASF),
-         FracGASM = ifelse(is.na(FracGASM ) & Emission == "N2O", 0.21, FracGASM),
-         `FracLEACH-(H)` = ifelse(is.na(`FracLEACH-(H)`) & Emission == "N2O", 0.21, FracGASM))
+  mutate(FracGASF = ifelse(is.na(FracGASF) & Emission == "N2O", 0.11, FracGASF), # 2019 refinement default values
+         FracGASM = ifelse(is.na(FracGASM ) & Emission == "N2O", 0.21, FracGASM), # 2019 refinement default values
+         `FracLEACH-(H)` = ifelse(is.na(`FracLEACH-(H)`) & Emission == "N2O", 0.21, `FracLEACH-(H)` )) # 2019 refinement default values
 
 fwrite(Table.3.D, file = "~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
+
 Table.3.D<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
 
 F.EM.Direct <- Table.3.D|> 
@@ -1196,20 +1191,21 @@ fwrite(Emissions, file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")
 #-------------------------------------------------------------------------------#
 
 Emissions <- read.csv(file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")|>
-  filter(Year == 2021,
-         !Country %in% c("SWE", "TUR", "LVA"))|>
+  filter(Year == 2021)|>
+         #!Country %in% c("SWE", "TUR", "LVA"))|>
   mutate(Rank = rank(-CO2eq))|>
   filter(Rank <=25)|>
   mutate(Country = fct_reorder(Country, d.2005),
          highlight = ifelse(Country %in% c("CAN", "USA", "EUA", "AUS", "RUS", "JPN"), T, F))
 
 ggplot(Emissions,aes(Country, d.2005, color = highlight, fill = highlight))+
-  geom_hline(yintercept = 0, color = "#333333", linetype = "dashed")+
+  geom_hline(yintercept = 0, color = "#333333")+
   #geom_segment(aes(x = Country, xend = Country, y = 0, yend = d.2005),  color = "#333333")+
   #geom_point(size = 4, fill = "#007574", color = "#333333", shape = 21)+
   geom_col(color = "#333333", alpha = 0.95)+
   theme_light()+
-  labs(title = "Change In National GHG Inventory Since 2005\n",
+  labs(title = "Comparison of Annex I Parties to the UNFCCC",
+       subtitle = "Change in 2021 emissions levels (including LULUCF) from a 2005 base year",
        x = "",
        y = "Change in Emissions (%)")+
   theme(
@@ -1238,8 +1234,8 @@ ggplot(Emissions,aes(Country, d.2005, color = highlight, fill = highlight))+
                 label = paste0(Country)),
             size = 4, 
             fontface = "bold")+
-  scale_fill_manual(values = c("#004C54", "red"))+
-  scale_color_manual(values = c("#004C54", "red"))
+  scale_fill_manual(values = c("#004c6d", "red"))+
+  scale_color_manual(values = c("#004c6d", "red"))
   scale_y_continuous(breaks = seq(-60,30,10),
                      expand = expansion(mult = c(0.15, 0.15)))
 
@@ -1299,7 +1295,7 @@ ggplot(Emissions,aes(Year,EM.IN, group = Country, color = highlight))+
                   segment.size = 0.2,
                   fontface = "bold", 
                   size = 4)+
-  scale_color_manual(values = c("#004C54", "red"))+
+  scale_color_manual(values = c("#004c6d", "red"))+
   labs(title = "International Comparison of Emission Intensities from 2005 to 2021",
        subtitle = "Measured in Tonnes CO2eq per Million Dollars GDP (2015 Constant Dollar USD)",
        x = "",
@@ -1347,16 +1343,16 @@ Sector$Sector<-factor(Sector$Sector, levels = c("National Inventory","Oil and Ga
                                                 "Heavy Industry","Agriculture","Electricity",
                                                 "Other"))
 
-Emrld.7<-hcl.colors(7, palette = "Emrld")
+Col.7<-c("#004c6d", "#2d6484", "#4c7c9b", "#6996b3", "#86b0cc", "#a3cbe5", "#c1e7ff")
 
 
 ggplot(subset(Sector,Sector !="National Inventory"))+
   geom_area(aes(Year, Mt.CO2eq, fill = Sector),alpha = 0.95)+
   geom_line(data = National.EM, aes(x = Year, y = as.numeric(CO2eq)), size = 1, color = "#333333")+
-  geom_point(aes(x = 2021, y = 670.4276866), size = 5, color = "#333333",fill = "#D4F3A3" , shape = 21)+
-  geom_point(aes(x = 2005, y = 732.2187885), size = 5, color = "#333333",fill = "#D4F3A3", shape = 21)+
+  geom_point(aes(x = 2021, y = 670.4276866), size = 5, color = "#333333",fill = "red" , shape = 21)+
+  geom_point(aes(x = 2005, y = 732.2187885), size = 5, color = "#333333",fill = "red", shape = 21)+
   geom_hline(yintercept = 732.2187885*.6, color = "azure2", linetype = "dashed", size = 1)+
-  scale_fill_manual(values = Emrld.7)+
+  scale_fill_manual(values = Col.7)+
   theme_classic()+
   annotate(geom = "text", x = 2019, y = 672,
            label = "Current Emissions:\n~670 Mt CO2eq ",
@@ -1380,7 +1376,8 @@ ggplot(subset(Sector,Sector !="National Inventory"))+
   theme(legend.position = "bottom",
         legend.title = element_blank())+
   guides(fill = guide_legend(nrow = 1))+
-  labs(title = "Canadian GHG Emissions by Economic Sector\n",
+  labs(title = "Canada's GHG Emissions from 1990 to 2021",
+       subtitle = "Total CO2 emissions by economic sector, excluding LULUCF",
        y = "Emissions(Mt CO2 eq)",
        x = "")
   
@@ -1399,8 +1396,8 @@ Sector<-full_join(Sector, Sector.2005)|>
 
 ggplot(subset(Sector,Year >=2005), aes(Year, d.EM*100, color = Sector))+
   geom_hline(yintercept = 0, linetype = "dashed")+
-  geom_line(aes(group=Sector), size = 2)+
-  geom_point(size = 4)+
+  geom_line(aes(group=Sector), size = 3)+
+  geom_point(size = 5)+
   geom_hline(yintercept = -40, linetype = "dashed")+
   annotate("text",x = 2005, y = -40, label = " eNDC Commitment: -40% by 2030",
            hjust = 0,
@@ -1410,15 +1407,15 @@ ggplot(subset(Sector,Year >=2005), aes(Year, d.EM*100, color = Sector))+
   scale_y_continuous(breaks = seq(-60,30,10))+
   theme_classic()+
   theme(legend.position = "none")+
-  scale_color_manual(values = c("red", Emrld.7))+
+  scale_color_manual(values = c("red", Col.7))+
   geom_text_repel(data = subset(Sector, Year == 2021), 
                   aes(label = paste0(Sector, ": ", round(d.EM*100,0), "%")) , 
                   hjust = -.1, 
                   fontface = "bold", 
                   size = 4,
                   color = "#333333")+
-  labs(title = "Change in GHG Emissions by Economic Sector",
-       subtitle = "Change in Total CO2eq emissions excluding LULUCF",
+  labs(title = "Change in Canadian Emissions Since 2005 by Economic Sector",
+       subtitle = "Change in CO2eq emissions excluding LULUCF from a 2005 baseline",
        x = "",
        y = "Change in Emissions (%)")
   
@@ -1478,10 +1475,10 @@ ggplot(Ag.Sector, aes(x = Year, y = as.numeric(CO2eq)))+
   geom_point(data = Ag.Can, 
              aes(x = as.numeric(Year), y = as.numeric(CO2eq)), 
              size = 3, 
-             fill = "#D4F3A3", 
+             fill = "azure2", 
              color = "#333333", 
              shape = 21)+
-  scale_fill_manual(values = hcl.colors(4, palette = "Emrld"))+
+  scale_fill_manual(values = c("#004c6d", "#5b87a8", "#a3c8e7"))+
   geom_text(data = Ag.Can,
             aes(x = Year, 
                 y = as.numeric(CO2eq)+3,
@@ -1492,7 +1489,7 @@ ggplot(Ag.Sector, aes(x = Year, y = as.numeric(CO2eq)))+
             aes(x = Year, 
                 y = Values,
                 label = paste0(round(CO2eq,0), "\nMt")),
-            color = "azure2",
+            color = "azure3",
             #angle = 90,
             size = 4, 
             fontface = "bold")+
@@ -1501,11 +1498,12 @@ ggplot(Ag.Sector, aes(x = Year, y = as.numeric(CO2eq)))+
         legend.title = element_blank())+
   scale_x_continuous(expand= expansion(mult= .01))+
   scale_y_continuous(expand= expansion(mult= c(0,.01)))+
-  labs(title = "Canadian Agricultural Emissions by Activity from 1990 to 2021\n",
+  labs(title = "Canadian Agricultural Emissions from 1990 to 2021",
+       subtitle = "Grouping based on Canadian economic sector classification",
        y = "Mt CO2eq",
        x = "")
   
-ggsave("Ag_Emissions.png", width = 12, height = 7, dpi = "retina")  
+ggsave("~/Simpson Centre/NIR/02-Data/Ag_Emissions.png", width = 12, height = 7, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
 # Emission Source
