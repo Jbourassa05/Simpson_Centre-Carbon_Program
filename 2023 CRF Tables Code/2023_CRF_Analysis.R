@@ -1191,10 +1191,10 @@ fwrite(Emissions, file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")
 #-------------------------------------------------------------------------------#
 
 Emissions <- read.csv(file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")|>
-  filter(Year == 2021)|>
-         #!Country %in% c("SWE", "TUR", "LVA"))|>
+  filter(Year == 2021,
+         !Country %in% c("SWE", "TUR", "LVA"))|>
   mutate(Rank = rank(-CO2eq))|>
-  filter(Rank <=25)|>
+  filter(Rank <=20)|>
   mutate(Country = fct_reorder(Country, d.2005),
          highlight = ifelse(Country %in% c("CAN", "USA", "EUA", "AUS", "RUS", "JPN"), T, F))
 
@@ -1204,8 +1204,9 @@ ggplot(Emissions,aes(Country, d.2005, color = highlight, fill = highlight))+
   #geom_point(size = 4, fill = "#007574", color = "#333333", shape = 21)+
   geom_col(color = "#333333", alpha = 0.95)+
   theme_light()+
-  labs(title = "Comparison of Annex I Parties to the UNFCCC",
-       subtitle = "Change in 2021 emissions levels (including LULUCF) from a 2005 base year",
+  labs(title = "Change In Total CO2eq Emissions from 2005 to 2021, Including LULUCF",
+       subtitle = "Includes the 20 largest emitting annex I parties",
+       caption = "Note: Figure excludes TUR: emissions increased by 95 percent since 2005 from 265.80 to 517.24 Mt.",
        x = "",
        y = "Change in Emissions (%)")+
   theme(
@@ -1215,45 +1216,46 @@ ggplot(Emissions,aes(Country, d.2005, color = highlight, fill = highlight))+
     axis.ticks.x = element_blank(),
     axis.text.x=element_blank())+
   geom_text(data = subset(Emissions, d.2005 <= 0),
-            aes(x = Country, d.2005-1,
+            aes(x = Country, d.2005-1.5,
                 label = paste0(round(d.2005,0), "%")),
             size = 4, 
             fontface = "bold")+
   geom_text(data = subset(Emissions, d.2005 <= 0),
-            aes(x = Country, 1,
+            aes(x = Country, 1.5,
                 label = paste0(Country)),
             size = 4, 
             fontface = "bold")+
   geom_text(data = subset(Emissions, d.2005 > 0),
-            aes(x = Country, d.2005+1,
+            aes(x = Country, d.2005+1.5,
                 label = paste0(round(d.2005,0), "%")),
             size = 4, 
             fontface = "bold")+
   geom_text(data = subset(Emissions, d.2005 > 0),
-            aes(x = Country, -1,
+            aes(x = Country, -1.5,
                 label = paste0(Country)),
             size = 4, 
             fontface = "bold")+
   scale_fill_manual(values = c("#004c6d", "red"))+
-  scale_color_manual(values = c("#004c6d", "red"))
+  scale_color_manual(values = c("#004c6d", "red"))+
   scale_y_continuous(breaks = seq(-60,30,10),
                      expand = expansion(mult = c(0.15, 0.15)))
+    
+ggsave("~/Simpson Centre/NIR/02-Data/C_International_Emissions.png", unit = "cm", width = 22, height = 15.75, dpi = "retina")  
 
   
-ggsave("~/Simpson Centre/NIR/02-Data/C_International_Emissions.png", width = 12, height = 7, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
 ## Emission Intensity Figure
 #-------------------------------------------------------------------------------#
 
 Emissions <- read.csv(file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")|>
-  filter(Year %in% c(2005, 2021))|>
-         #!Country %in% c("KAZ","BLR","RUS","BGR","POL"))|>
+  filter(Year %in% c(2005, 2021),
+         !Country %in% c("KAZ"))|>
   group_by(Year)|>
   mutate(Rank = rank(-CO2eq))|>
   ungroup()
 
-EM.List<-filter(Emissions, Year == 2021 & Rank <=21)|>select(Country)
+EM.List<-filter(Emissions, Year == 2021 & Rank <=20)|>select(Country)
 EM.List<-c(EM.List$Country)
 
 Emissions<- filter(Emissions, Country %in% EM.List)|>
@@ -1277,7 +1279,7 @@ ggplot(Emissions,aes(Year,EM.IN, group = Country, color = highlight))+
              alpha = .75)+
   geom_text_repel(data = subset(Emissions, Year == 2005),
                   aes(x = Year, y = EM.IN,  color = highlight,
-                      label = paste0(Country, ": ", round(EM.IN,0), " t/$M")),
+                      label = paste0(Country, ": ", round(EM.IN,0), " t")),
                   force        = 0.5,
                   nudge_x      = -0.25,
                   direction    = "y",
@@ -1287,7 +1289,7 @@ ggplot(Emissions,aes(Year,EM.IN, group = Country, color = highlight))+
                   size = 4)+
   geom_text_repel(data = subset(Emissions, Year == 2021),
                   aes(x = Year, y = EM.IN, color = highlight,
-                      label = paste0(Country, ": ", round(EM.IN,0), " t/$M")),
+                      label = paste0(Country, ": ", round(EM.IN,0), " t")),
                   force        = 0.5,
                   nudge_x      = 0.25,
                   direction    = "y",
@@ -1296,8 +1298,9 @@ ggplot(Emissions,aes(Year,EM.IN, group = Country, color = highlight))+
                   fontface = "bold", 
                   size = 4)+
   scale_color_manual(values = c("#004c6d", "red"))+
-  labs(title = "International Comparison of Emission Intensities from 2005 to 2021",
-       subtitle = "Measured in Tonnes CO2eq per Million Dollars GDP (2015 Constant Dollar USD)",
+  labs(title = "Change In Emission Intensity Measured in Tonnes CO2eq per Million Dollars GDP",
+       subtitle = "GDP values measured in 2015 constant dollar (USD), includes the 20 largest emitting annex I parties",
+       caption = "Note: Figure excludes KAZ, emission intensity decreased from 3420 to 1590 t/$M between 2005 and 2021",
        x = "",
        y = "")+
   theme_light()+
@@ -1306,12 +1309,14 @@ ggplot(Emissions,aes(Year,EM.IN, group = Country, color = highlight))+
         panel.grid.minor.y = element_blank(),
         panel.border = element_blank(),
         axis.ticks.y = element_blank(),
-        axis.text.y=element_blank())+
+        axis.text.y=element_blank(),
+        axis.text.x = element_text(size = 15, 
+                                   face = "bold"))+
   scale_x_discrete(position  = "top")+
-  scale_y_continuous(limits = c(-500, 1500), expand =  expansion(mult = c(0, 0.20)))
+  scale_y_continuous(limits = c(-150, 1400), expand =  expansion(mult = c(0, 0.0)))
   
   
-ggsave("~/Simpson Centre/NIR/02-Data/C_International_Emission_IN.png", width = 12, height = 7, dpi = "retina")  
+ggsave("~/Simpson Centre/NIR/02-Data/C_International_Emission_IN.png", unit = "cm", width = 22, height = 20, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
 ## National Emissions ----
@@ -1349,12 +1354,12 @@ Col.7<-c("#004c6d", "#2d6484", "#4c7c9b", "#6996b3", "#86b0cc", "#a3cbe5", "#c1e
 ggplot(subset(Sector,Sector !="National Inventory"))+
   geom_area(aes(Year, Mt.CO2eq, fill = Sector),alpha = 0.95)+
   geom_line(data = National.EM, aes(x = Year, y = as.numeric(CO2eq)), size = 1, color = "#333333")+
-  geom_point(aes(x = 2021, y = 670.4276866), size = 5, color = "#333333",fill = "red" , shape = 21)+
-  geom_point(aes(x = 2005, y = 732.2187885), size = 5, color = "#333333",fill = "red", shape = 21)+
+  geom_point(aes(x = 2021, y = 670.4276866), size = 3, color = "#333333",fill = "red" , shape = 21)+
+  geom_point(aes(x = 2005, y = 732.2187885), size = 3, color = "#333333",fill = "red", shape = 21)+
   geom_hline(yintercept = 732.2187885*.6, color = "azure2", linetype = "dashed", size = 1)+
   scale_fill_manual(values = Col.7)+
   theme_classic()+
-  annotate(geom = "text", x = 2019, y = 672,
+  annotate(geom = "text", x = 2017, y = 672,
            label = "Current Emissions:\n~670 Mt CO2eq ",
            hjust = 0.5,
            vjust = 1.5,
@@ -1369,7 +1374,7 @@ ggplot(subset(Sector,Sector !="National Inventory"))+
            hjust = .5,
            vjust = -1.1,
            color = "azure2")+
-  scale_x_continuous(breaks = seq(1990,2021,2),
+  scale_x_continuous(breaks = seq(1990,2021,5),
                     expand = expansion(mult = c(0,0.01)))+
   scale_y_continuous(breaks = seq(0,800,100), 
                      expand = expansion(mult = c(0.00,.05)))+
@@ -1377,11 +1382,11 @@ ggplot(subset(Sector,Sector !="National Inventory"))+
         legend.title = element_blank())+
   guides(fill = guide_legend(nrow = 1))+
   labs(title = "Canada's GHG Emissions from 1990 to 2021",
-       subtitle = "Total CO2 emissions by economic sector, excluding LULUCF",
+       subtitle = "Total CO2eq emissions by economic sector, excluding LULUCF",
        y = "Emissions(Mt CO2 eq)",
        x = "")
   
-ggsave("~/Simpson Centre/NIR/02-Data/National_Emissions.png", width = 12, height = 7, dpi = "retina")  
+ggsave("~/Simpson Centre/NIR/02-Data/National_Emissions.png", unit = "cm", width = 22, height = 15.75, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
 # Change in National Emissions
@@ -1396,8 +1401,8 @@ Sector<-full_join(Sector, Sector.2005)|>
 
 ggplot(subset(Sector,Year >=2005), aes(Year, d.EM*100, color = Sector))+
   geom_hline(yintercept = 0, linetype = "dashed")+
-  geom_line(aes(group=Sector), size = 3)+
-  geom_point(size = 5)+
+  geom_line(aes(group=Sector), size = 2)+
+  geom_point(size = 4)+
   geom_hline(yintercept = -40, linetype = "dashed")+
   annotate("text",x = 2005, y = -40, label = " eNDC Commitment: -40% by 2030",
            hjust = 0,
@@ -1410,16 +1415,20 @@ ggplot(subset(Sector,Year >=2005), aes(Year, d.EM*100, color = Sector))+
   scale_color_manual(values = c("red", Col.7))+
   geom_text_repel(data = subset(Sector, Year == 2021), 
                   aes(label = paste0(Sector, ": ", round(d.EM*100,0), "%")) , 
-                  hjust = -.1, 
+                  force        = 0.5,
+                  nudge_x      = 0.25,
+                  direction    = "y",
+                  hjust        = 0,
+                  segment.size = 0.2,
                   fontface = "bold", 
-                  size = 4,
+                  size = 3,
                   color = "#333333")+
   labs(title = "Change in Canadian Emissions Since 2005 by Economic Sector",
-       subtitle = "Change in CO2eq emissions excluding LULUCF from a 2005 baseline",
+       subtitle = "Change in Total CO2eq emissions from 2005, excluding LULUCF",
        x = "",
        y = "Change in Emissions (%)")
   
-ggsave("~/Simpson Centre/NIR/02-Data/C_National_Emissions.png", width = 12, height = 7, dpi = "retina")  
+ggsave("~/Simpson Centre/NIR/02-Data/C_National_Emissions.png", unit = "cm", width = 23, height = 15.75, dpi = "retina")  
 
 
 #-------------------------------------------------------------------------------#
@@ -1489,7 +1498,7 @@ ggplot(Ag.Sector, aes(x = Year, y = as.numeric(CO2eq)))+
             aes(x = Year, 
                 y = Values,
                 label = paste0(round(CO2eq,0), "\nMt")),
-            color = "azure3",
+            color = "azure2",
             #angle = 90,
             size = 4, 
             fontface = "bold")+
@@ -1503,29 +1512,83 @@ ggplot(Ag.Sector, aes(x = Year, y = as.numeric(CO2eq)))+
        y = "Mt CO2eq",
        x = "")
   
-ggsave("~/Simpson Centre/NIR/02-Data/Ag_Emissions.png", width = 12, height = 7, dpi = "retina")  
+ggsave("~/Simpson Centre/NIR/02-Data/Ag_Emissions.png", unit = "cm", width = 23, height = 15.75, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
 # Emission Source
 #-------------------------------------------------------------------------------#
 
+Cattle.Can<- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle.csv")|>
+  filter(Country == "CAN",
+         Year == 2021)|>
+  select(1,5,12, 13,14,11, 20, 23)|>
+  reframe(Enteric.Fermentation = sum(EM.CH4),
+            Managed.Manure.CH4 = sum(CH4.MM),
+            Managed.Manure.N2O = sum(N2O.MM),
+            Managed.Manure.Ind = sum(Indirect.N2O), 
+            N.Pasture  = sum(N.Pasture),
+            Unmanged.Manure = sum(PRP.N2O),
+            Unmanged.Manure.Ind = sum(PRP.Ind))
 
-Animal.Production<-Ag.Sector|>
-  filter(Year == 2021,
-         Sector == "Animal Production")
+Enteric.Fermentation <-c(Cattle.Can$Enteric.Fermentation)
+Managed.Manure.CH4 <-c(Cattle.Can$Managed.Manure.CH4)
+Managed.Manure.N2O <-c(Cattle.Can$Managed.Manure.N2O + Cattle.Can$Managed.Manure.Ind)
+N.Pasture <- c(Cattle.Can$N.Pasture)
+Unmanged.Manure <-c(Cattle.Can$Unmanged.Manure)
+Unmanged.Manure.Ind <-(Cattle.Can$Unmanged.Manure.Ind)
+
+
+Can.Sum<- read_csv("~/Simpson Centre/NIR/02-Data/Table_3_2023.csv")|>
+  filter(Category %in% c("Enteric Fermentation", "Manure Management"),
+         Country == 'CAN',
+         Year == 2021)|>
+  mutate(`Livestock Type` = "Other Livestock",
+         CH4 = ifelse(Category == "Enteric Fermentation", CH4-Enteric.Fermentation,
+                      ifelse(Category == "Manure Management", CH4-Managed.Manure.CH4, CH4)),
+         N2O = ifelse(Category == "Manure Management", N2O - Managed.Manure.N2O, N2O))
+
+Can.PRP <- read_csv("~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")|>
+  filter(Emission.Source == "N from grazing animals",
+         Country == 'CAN',
+         Year == 2021)|>
+  mutate(N.PRP = Application - N.Pasture, 
+         N2O.PRP = ((N.PRP*IEF)*(44/28))/10^6,
+         N2O.IND = ((((N.PRP*FracGASF)*0.00739324918008)+((N.PRP*`FracLEACH-(H)`)*0.0075))*(44/28))/10^6,
+         N2O = N2O.PRP+N2O.IND,
+         CH4 = 0, 
+         CO2 = 0,
+         CO2eq.kt = N2O*298,
+         `Livestock Type` = "Other Livestock", 
+         Category = "Manure: Unmanaged")|>
+  select(-3:-14)
 
 Cattle.Can<- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle.csv")|>
   filter(Country == "CAN",
          Year == 2021)|>
-  select(1,5,12:16)|>
-  mutate(Total.EM = (EM.CH4*25)+(CH4.MM*25)+(N2O.MM*298)+(Indirect.N2O*298)+(PRP.N2O*298)+(PRP.Ind*298),
-         `Enteric Fermentation` = (EM.CH4*25),
-         `Managed Manure` = (CH4.MM*25)+(N2O.MM*298)+(Indirect.N2O*298),
-         `Unmanaged Manure` = (PRP.N2O*298)+(PRP.Ind*298))|>
-  select(1,8:11)
+  mutate(`Manure: Managed CH4` = CH4.MM,
+         `Manure: Managed N2O`= N2O.MM+Indirect.N2O,
+         `Manure: Unmanaged` = PRP.N2O+PRP.Ind)|>
+  rename(`Livestock Type` = Type.A,
+         `Enteric Fermentation` = EM.CH4)|>
+  select(Year, Country, `Livestock Type`,`Manure: Managed CH4`, `Manure: Managed N2O`,`Manure: Unmanaged`, `Enteric Fermentation`)|>
+  gather(Category, Value, 4:7)|>
+  mutate(CO2 = 0,
+         CH4 = ifelse(Category %in% c("Manure: Managed CH4","Enteric Fermentation"), Value, 0),
+         N2O = ifelse(!Category %in% c("Manure: Managed CH4","Enteric Fermentation"), Value, 0),
+         Category = ifelse(Category %in% c("Enteric Fermentation", "Manure: Unmanaged"), Category, "Manure: Managed"))|>
+  group_by(Year, Country, `Livestock Type`, Category)|>
+  summarise(CO2 = sum(CO2),
+            CH4 = sum(CH4),
+            N2O = sum(N2O))|>
+  mutate(CO2eq.kt = CO2+(CH4*25)+(N2O*298))
+  
 
 
-Other.Livestock <- c("Other Livestock", , 1055.762145, 2873.547889, )
+
+
+Animal.Production<-rbind(Can.Sum, Can.PRP, Cattle.Can)|>
+  mutate(Category = ifelse(Category == "Manure Management", "Manure: Managed", Category))|>
+  mutate(CO2eq.kt = CO2+(CH4*25)+(N2O*298))
 
 
 
