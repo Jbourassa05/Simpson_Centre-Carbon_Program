@@ -18,6 +18,7 @@ library(tidyverse)
 library(data.table)
 library(readxl)
 library(ggrepel)
+library(tidytext)
 
 #-------------------------------------------------------------------------------#
 
@@ -1162,7 +1163,7 @@ EM.Crop<-full_join(EM.Crop, Land.Use)|> # Calculating Net Emissions from crop pr
 fwrite(EM.Crop, file = "~/Simpson Centre/NIR/02-Data/NIR_2023_CropProduction.csv") # Can be Found at: https://github.com/Jbourassa05/Simpson_Centre-Carbon_Program
   
 #-------------------------------------------------------------------------------#
-## National Emission Trends + Intensity ----
+## National Emission Trends + Intensity
 #-------------------------------------------------------------------------------# 
 
 Country.List<-c("AUS","AUT", "BEL", "BGR", "BLR", "CAN", "CHE", "CYP", "DNK",
@@ -1175,10 +1176,12 @@ Country.List<-c("AUS","AUT", "BEL", "BGR", "BLR", "CAN", "CHE", "CYP", "DNK",
 
 Emissions <- fread("~/Simpson Centre/NIR/02-Data/National_Emissions_2023.csv")
 
-Emissions.2005 <-filter(Emissions, Year == 2005)|>rename(CO2eq.2005 = 3)|>select(-2)
+Emissions.2005 <-filter(Emissions, Year == 2005)|>rename(CO2eq.2005 = 3)|>select(-2) # selecting 2005 emissions
 
-Emissions<-full_join(Emissions,Emissions.2005)|>
+Emissions<-full_join(Emissions,Emissions.2005)|> # Estimating change since 2005
   mutate(d.2005 = ((CO2eq- CO2eq.2005)/CO2eq.2005)*100)
+
+# GDP Data was collected from the World banks Data bank: https://data.worldbank.org/indicator/NY.GDP.MKTP.KD
 
 GDP <- read_csv("~/Simpson Centre/NIR/02-Data/2022_CanSectorData/World_GDP.csv")|>
   select(-1,-2,-3)|>
@@ -1188,30 +1191,34 @@ GDP <- read_csv("~/Simpson Centre/NIR/02-Data/2022_CanSectorData/World_GDP.csv")
   gather(Year, GDP, 2:18)|>
   mutate(Year = as.numeric(Year))
 
-Emissions<-full_join(Emissions, GDP)|>
+Emissions<-full_join(Emissions, GDP)|> # joining Emission data to GDP data
   filter(!is.na(GDP))|>
   mutate(GDP = as.numeric(GDP),
          t.CO2 = CO2eq*10^6,
-         EM.IN = t.CO2/(GDP/10^6))
+         EM.IN = t.CO2/(GDP/10^6)) # t per Million dollards GDP
 
-fwrite(Emissions, file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")
+fwrite(Emissions, file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv") # Can be Found at: https://github.com/Jbourassa05/Simpson_Centre-Carbon_Program
 
 #-------------------------------------------------------------------------------#
-## Emission Comparison Figure
-#-------------------------------------------------------------------------------#
 
+# Webinar Figures and Further Analysis ----
+
+#-------------------------------------------------------------------------------#
+#-------------------------------------------------------------------------------#
+## Change in Emissions Since 2005 Comparison
+#-------------------------------------------------------------------------------#
 Emissions <- read.csv(file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")|>
   filter(Year == 2021,
-         !Country %in% c("SWE", "TUR", "LVA"))|>
+         !Country %in% c("TUR"))|> # Large Outlier
   mutate(Rank = rank(-CO2eq))|>
-  filter(Rank <=20)|>
+  filter(Rank <=20)|> # selecting the 20 largest emitters for figure
   mutate(Country = fct_reorder(Country, d.2005),
-         highlight = ifelse(Country %in% c("CAN", "USA", "EUA", "AUS", "RUS", "JPN"), T, F))
+         highlight = ifelse(Country %in% c("CAN", "USA", "EUA", "AUS", "RUS", "JPN"), T, F)) # highlighted values (Large Emitters)
+
+## Figure
 
 ggplot(Emissions,aes(Country, d.2005, color = highlight, fill = highlight))+
   geom_hline(yintercept = 0, color = "#333333")+
-  #geom_segment(aes(x = Country, xend = Country, y = 0, yend = d.2005),  color = "#333333")+
-  #geom_point(size = 4, fill = "#007574", color = "#333333", shape = 21)+
   geom_col(color = "#333333", alpha = 0.95)+
   theme_light()+
   labs(title = "Change In Total CO2eq Emissions from 2005 to 2021, Including LULUCF",
@@ -1252,16 +1259,15 @@ ggplot(Emissions,aes(Country, d.2005, color = highlight, fill = highlight))+
     
 ggsave("~/Simpson Centre/NIR/02-Data/C_International_Emissions.png", unit = "cm", width = 22, height = 15.75, dpi = "retina")  
 
+#-------------------------------------------------------------------------------#
+# Total Emissions in 2021 by Annex I Party
+#-------------------------------------------------------------------------------#
 
 Emissions <- fread("~/Simpson Centre/NIR/02-Data/National_Emissions_2023.csv")|>
   filter(Year == 2021)|>
   mutate(Country = fct_reorder(Country, CO2eq),
          Rank = rank(-CO2eq))|>
   filter(Rank <= 30)
-
-#-------------------------------------------------------------------------------#
-# NI comparison by Country
-#-------------------------------------------------------------------------------#
 
 ggplot(Emissions, aes(Country, CO2eq))+
   geom_hline(yintercept = 0, color = "#333333")+
@@ -1293,7 +1299,7 @@ ggplot(Emissions, aes(Country, CO2eq))+
 ggsave("~/Simpson Centre/NIR/02-Data/C_International_Emission_total.png", unit = "cm", width = 22, height = 15.75, dpi = "retina")
 
 #-------------------------------------------------------------------------------#
-## Emission Intensity Figure
+# Emission Intensity Figure
 #-------------------------------------------------------------------------------#
 
 Emissions <- read.csv(file = "~/Simpson Centre/NIR/02-Data/Emission_Intensity.csv")|>
@@ -1312,7 +1318,7 @@ Emissions<- filter(Emissions, Country %in% EM.List)|>
 
 
 
-
+# Figure
 
 ggplot(Emissions,aes(Year,EM.IN, group = Country, color = highlight))+
   geom_path(alpha = 0.5, size = 1)+
@@ -1366,15 +1372,17 @@ ggplot(Emissions,aes(Year,EM.IN, group = Country, color = highlight))+
   
 ggsave("~/Simpson Centre/NIR/02-Data/C_International_Emission_IN.png", unit = "cm", width = 22, height = 20, dpi = "retina")  
 
-#-------------------------------------------------------------------------------#
-## National Emissions ----
-#-------------------------------------------------------------------------------#  
 
 #-------------------------------------------------------------------------------#
-# Canadian Emissions
+# Canadian Emissions By Economic Sector
 #-------------------------------------------------------------------------------# 
 
+# Data for this section was collected from : https://data-donnees.ec.gc.ca/data/substances/monitor/canada-s-official-greenhouse-gas-inventory/
+# https://data-donnees.ec.gc.ca/data/substances/monitor/canada-s-official-greenhouse-gas-inventory/B-Economic-Sector/?lang=en
+
 EM.Sector <- read_csv("~/Simpson Centre/NIR/02-Data/2023 Data/EN_GHG_Econ_Can_Prov_Terr.csv")
+
+# Data is provided by province and region for each sector and subsector from 1990 to 2021 
 
 National.EM <- EM.Sector|>
   filter(Region == "Canada",
@@ -1383,7 +1391,7 @@ National.EM <- EM.Sector|>
 
 Sector<-EM.Sector|>
   filter(Region == "Canada",
-         Index %in% c(0,1,44,16,17,25,45,33,40,36))|>
+         Index %in% c(0,1,44,16,17,25,45,33,40,36))|> # Selecting ag related variables
   select(-2,-5:-8,-10)|>
   mutate(Sector = ifelse(Index %in% c(44,45,40), "Other",
                          ifelse(Index == 0, "National Inventory", Source)),
@@ -1437,15 +1445,17 @@ ggplot(subset(Sector,Sector !="National Inventory"))+
 ggsave("~/Simpson Centre/NIR/02-Data/National_Emissions.png", unit = "cm", width = 22, height = 15.75, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
-# Change in National Emissions
+# Change in National Emissions since 2005
 #-------------------------------------------------------------------------------#
 
-Sector.2005<-Sector|>
+# Same source as above
+
+Sector.2005<-Sector|> # selecting 2005 for baseline
   filter(Year == 2005)|>
   rename(CO2eq.2005 = Mt.CO2eq)|>
   select(-1)
 Sector<-full_join(Sector, Sector.2005)|>
-  mutate(d.EM = (Mt.CO2eq-CO2eq.2005)/CO2eq.2005)
+  mutate(d.EM = (Mt.CO2eq-CO2eq.2005)/CO2eq.2005) # Calculating change since 2005
 
 ggplot(subset(Sector,Year >=2005), aes(Year, d.EM*100, color = Sector))+
   geom_hline(yintercept = 0, linetype = "dashed")+
@@ -1480,8 +1490,10 @@ ggsave("~/Simpson Centre/NIR/02-Data/C_National_Emissions.png", unit = "cm", wid
 
 
 #-------------------------------------------------------------------------------#
-## Agriculture Emissions ----
+# Agriculture Emissions 
 #-------------------------------------------------------------------------------#
+
+# Tables required for analysis
 
 Cattle <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle.csv")
 CropProduction <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_CropProduction.csv")
@@ -1490,21 +1502,23 @@ Table.3.Cattle <- read_csv("~/Simpson Centre/NIR/02-Data/Table_3_Cattle_2023.csv
 Table.3 <- read_csv("~/Simpson Centre/NIR/02-Data/Table_3_2023.csv")
 EM.Sector <- read_csv("~/Simpson Centre/NIR/02-Data/2023 Data/EN_GHG_Econ_Can_Prov_Terr.csv")
 
-
+#-------------------------------------------------------------------------------#
+# Total Emissions from the Ag Sector
+#-------------------------------------------------------------------------------#
 
 Ag.Sector<-EM.Sector|>
-  filter(Index %in% c(37,38,39), 
+  filter(Index %in% c(37,38,39), # selecting sub sectors related to Ag
          Region == "Canada")|>
   select(Year, Sector, CO2eq)
 
-Ag.Can<-EM.Sector|>
+Ag.Can<-EM.Sector|> # selecting for labels
   filter(Index %in% c(36), 
          Region == "Canada",
          Year %in% c(1990,1995,2000,2005,2010,2015,2021))|>
   select(Year, Sector, CO2eq)|>
   mutate(Sector = "Total")
 
-Ag.Sector.labs = full_join(Ag.Sector, Ag.Can)|>
+Ag.Sector.labs = full_join(Ag.Sector, Ag.Can)|> # Label Placement
   filter(Year %in% c(1990,1995,2000,2005,2010,2015,2021))|>
   mutate(CO2eq = as.numeric(CO2eq))|>
   spread(Sector, CO2eq)|>
@@ -1513,8 +1527,6 @@ Ag.Sector.labs = full_join(Ag.Sector, Ag.Can)|>
          AP = `On Farm Fuel Use`+`Crop Production`+(`Animal Production`/2))|>
   select(1,6,7,8)|>
   gather(Sector, Values, 2:4)
-
-
 
 Ag.Sector.2<-full_join(Ag.Sector, Ag.Can)|>
   filter(Year %in% c(1990,1995,2000,2005,2010,2015,2021),
@@ -1526,6 +1538,9 @@ Ag.Sector.2<-full_join(Ag.Sector, Ag.Can)|>
 Ag.Sector.labs<-full_join(Ag.Sector.labs, Ag.Sector.2)
 
 Ag.Sector$Sector<-factor(Ag.Sector$Sector, levels = c("Animal Production", "Crop Production", "On Farm Fuel Use"))
+
+
+# Figure 
 
 ggplot(Ag.Sector, aes(x = Year, y = as.numeric(CO2eq)))+
   geom_col(aes(fill = Sector),alpha = 0.9, color = "#333333", width = 1)+
@@ -1563,7 +1578,7 @@ ggplot(Ag.Sector, aes(x = Year, y = as.numeric(CO2eq)))+
 ggsave("~/Simpson Centre/NIR/02-Data/Ag_Emissions.png", unit = "cm", width = 23, height = 15.75, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
-# Animal Production Slide
+# Animal Production
 #-------------------------------------------------------------------------------#
 
 # Change in Emissions Since 2005
@@ -1636,6 +1651,9 @@ ggplot(Animal.Production, aes(Year, d.2005, color = Category))+
 
 ggsave("~/Simpson Centre/NIR/02-Data/Animal_Emissions.png", unit = "cm", width = 15*1.5, height = 12*1.5, dpi = "retina")  
 
+#-------------------------------------------------------------------------------#
+# Estimating Breakdown of emissions by livestock , source, and gas
+#-------------------------------------------------------------------------------#
 
 Animal.Production.Sector<-Animal.Production|>
   filter(Year == 2021 & Category != "Animal Production")|>
@@ -1680,7 +1698,7 @@ Can.Cattle.Source <- Cattle|>
   gather(Source, Value, 2:4)
 
 #------------------------------------------------------------------------------#
-## Comparison of Cattle and Dairy Cattle Characteristics
+# Comparison of Cattle and Dairy Cattle Characteristics
 #------------------------------------------------------------------------------#
 
 Cattle.Emissions <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle.csv")|>
@@ -1746,17 +1764,15 @@ ggplot(Cattle.Sum.Join, aes(Year, d.2005))+
 ggsave("~/Simpson Centre/NIR/02-Data/Can_Cattle.png", unit = "cm", width = 38, height = 16, dpi = "retina")  
 
 
-Cattle.Emissions <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle.csv")|>
-  filter(Country %in% c("CAN", "AUS", "USA", "EUA", "NZL"),
-         Year == 2021)|>
-  mutate(GE = round(GE,0))
+#Cattle.Emissions <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle.csv")|>
+#  filter(Country %in% c("CAN", "AUS", "USA", "EUA", "NZL"),
+#         Year == 2021)|>
+#  mutate(GE = round(GE,0))
 
 
 #-------------------------------------------------------------------------------#
-#install.packages("tidytext")
-library(tidytext)
-
-
+# Emission Per head comparison for dairy and non-dairy cattle
+#-------------------------------------------------------------------------------#
 Cattle <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle.csv")
 
 Cattle.Int <- Cattle|>
@@ -1824,12 +1840,12 @@ ggplot(Cattle.Int, aes(Country, IEF))+
 ggsave("~/Simpson Centre/NIR/02-Data/Cattle_IEF.png", unit = "cm", width = 23, height = 16, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
-## Intensity EM/mcal
+## Intensity EM/mcal for non-dairy cattle
 #-------------------------------------------------------------------------------#
   
 Cattle.Int <- Cattle|>
   filter(Year %in% c(2021),
-         Country != "JPN",
+         Country != "JPN", #GE data missing from JPN due to differences in methodology
          Type.A != "Dairy Cattle")|>
   group_by(Type.A)|>
   mutate(Rank = rank(-`Total Emissions kt.CO2.eq`),
@@ -1878,7 +1894,7 @@ ggplot(Cattle.Int, aes(Country, `EM/Mcal`*1000))+
 ggsave("~/Simpson Centre/NIR/02-Data/Cattle_Mcal.png", unit = "cm", width = 23, height = 16, dpi = "retina")  
 
 #-------------------------------------------------------------------------------#
-## Intensity EM/kg Milk
+## Intensity EM/kg Milk for dairy cattle
 #-------------------------------------------------------------------------------#
 
 Cattle.Int.Dairy <- Cattle|>
@@ -1935,10 +1951,14 @@ ggplot(Cattle.Int.Dairy, aes(Country, `EM/kg.Milk`))+
 ggsave("~/Simpson Centre/NIR/02-Data/Cattle_Milk.png", unit = "cm", width = 23, height = 16, dpi = "retina") 
 
 #-------------------------------------------------------------------------------#
-# Crop Production Figures ----
+# Crop Production Figures
 #-------------------------------------------------------------------------------#
 CropProduction <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_CropProduction.csv")
 Fertilizer <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_Fertilizer.csv")
+
+#-------------------------------------------------------------------------------#
+# Fertilizer Emissions per kg N 
+#-------------------------------------------------------------------------------#
 
 Fert <- Fertilizer|>
   filter(Year == 2021,
@@ -1992,7 +2012,7 @@ ggsave("~/Simpson Centre/NIR/02-Data/FertIEF.png", unit = "cm", width = 23, heig
 
 
 #-------------------------------------------------------------------------------#
-# Emissions Per ha
+# Fertilizer emissions (Organic + Inorganic) Per ha
 #-------------------------------------------------------------------------------#
 
 Fert <- Fertilizer|>
@@ -2053,7 +2073,7 @@ ggplot(Fert, aes(Country, EM.Ha, color = highlight, fill = highlight))+
 ggsave("~/Simpson Centre/NIR/02-Data/FertHA.png", unit = "cm", width = 23, height = 16, dpi = "retina")
 
 #------------------------------------------------------------------------------#
-#Canadian Crop Production overview slide
+# Canadian Crop Production overview slide
 #------------------------------------------------------------------------------#
 Fertilizer.EM <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_Fertilizer.csv")|>
   filter(Country == "CAN",
@@ -2114,7 +2134,6 @@ Crop.Total<-rbind(Crop.Total, T.Nitrogen)
 Crop.Total$Metric <-factor(Crop.Total$Metric, levels = c("Total", "Inorganic", "Organic"))
 
 
-
 ggplot(Crop.Total, aes(Year, d.2005))+
   geom_hline(yintercept = 0, color = "#333333", linetype = "dashed")+
   geom_line(aes(color = Metric, linetype = Type), size = 2)+
@@ -2143,11 +2162,8 @@ ggplot(Crop.Total, aes(Year, d.2005))+
 ggsave("~/Simpson Centre/NIR/02-Data/Crop_Overview.png", unit = "cm", width = 23, height = 16, dpi = "retina")
 
 
-
-         
-
 #-------------------------------------------------------------------------------#
-# Emissions from Crop Production Figure
+# Total and Net Emissions from Crop Production
 #-------------------------------------------------------------------------------#
 
 CropProduction <- read_csv("~/Simpson Centre/NIR/02-Data/NIR_2023_CropProduction.csv")
@@ -2224,28 +2240,8 @@ ggplot(CP, aes(Country, Value, fill = Measurement))+
 
 ggsave("~/Simpson Centre/NIR/02-Data/CP.png", unit = "cm", width = 23, height = 16, dpi = "retina")
 
+#-------------------------------------------------------------------------------#
 
-
-
-
-
-+
-  scale_color_manual(values = c("#333333", "red"))+
-  scale_y_continuous(limits = c(-2,8),expand = expansion(mult = c(0.01, 0.1)))+
-  scale_x_discrete(expand = expansion(mult = c(0.05, 0.05)))+
-  geom_text(data = CP,
-            aes(x = Country,
-                y = 0,
-                label = paste0("  ",Country.Lab, ": ", round(CO2eq.ha, 1), "(", round(Total.CO2eq.ha,1),")"),
-                color = highlight),
-            hjust = "left",
-            angle = -90,
-            size = 4,
-            fontface = "bold")
-  
-  
-  
-ggsave("Crop_ha.png", width = 12, height = 7, dpi = "retina")
          
 
 
