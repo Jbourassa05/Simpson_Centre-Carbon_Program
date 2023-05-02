@@ -8,11 +8,11 @@
 
 #-------------------------------------------------------------------------------#
 #-------------------------------------------------------------------------------#
+# Suggested Reading: 
+# IPCC 2019 Refinement methodology: Animal Production: https://www.ipcc-nggip.iges.or.jp/public/2019rf/pdf/4_Volume4/19R_V4_Ch10_Livestock.pdf
+# IPCC 2019 Refinement methodology: Crop Production: https://www.ipcc-nggip.iges.or.jp/public/2019rf/pdf/4_Volume4/19R_V4_Ch11_Soils_N2O_CO2.pdf
 
 # System Setup ----
-
-#-------------------------------------------------------------------------------#
-#Loading Packages
 
 library(tidyverse)
 library(data.table)
@@ -897,20 +897,17 @@ fwrite(Table.3.B, file = "~/Simpson Centre/NIR/02-Data/Table_3_B_2023.csv")
 fwrite(Table.3.D, file = "~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
 fwrite(Table.4, file = "~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
 
-#-------------------------------------------------------------------------------#
-
-# Data Cleaning For Analysis ----
-
-#-------------------------------------------------------------------------------#
-
-Table.3.A<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_A_2023.csv")
-Table.3.B<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_B_2023.csv")
-Table.3.D<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
-Table.4<-read_csv("~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
+# Data can be found at: https://github.com/Jbourassa05/Simpson_Centre-Carbon_Program
 
 
 #-------------------------------------------------------------------------------#
-# Data Cleaning for Cattle Variables + Analysis
+#-------------------------------------------------------------------------------#
+# Data Cleaning ----
+#-------------------------------------------------------------------------------#
+#-------------------------------------------------------------------------------#
+
+#-------------------------------------------------------------------------------#
+# Data Cleaning for Cattle Variables
 #-------------------------------------------------------------------------------#
 
 ## Manure Management
@@ -921,15 +918,16 @@ Table.4<-read_csv("~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")
 Table.3.B<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_B_2023.csv")|>
   select(9,10,1, 8,2,7,17,22,28, 31,32)|>
   mutate(across(c("Year","Population", "CH4.kt","Pasture","Direct.N2O"), as.numeric),
-         Pasture = ifelse(is.na(Pasture), 0, Pasture),
-         CH4.kt = ifelse(is.na(CH4.kt), 0, CH4.kt),
-         Direct.N2O = ifelse(is.na(Direct.N2O), 0, Direct.N2O))|>
-  filter(!is.na(Population))
+         Pasture = ifelse(is.na(Pasture), 0, Pasture), # replacing NA with O
+         CH4.kt = ifelse(is.na(CH4.kt), 0, CH4.kt), # replacing NA with O
+         Direct.N2O = ifelse(is.na(Direct.N2O), 0, Direct.N2O))|> # replacing NA with O
+  filter(!is.na(Population)) # removing rows where population is NA
   
 #-------------------------------------------------------------------------------#         
-### Correcting for Missing Values or Zero Values
-  ### EU average used for N2O.Runoff.IEF for EU countries
-  # Canadian Values are used for the United States
+# imputing missing values for indirect emissions
+#-------------------------------------------------------------------------------#
+### EU average used for N2O.Runoff.IEF for EU countries
+### Canadian Values are used for the United States
 #-------------------------------------------------------------------------------#
 
 EU<-filter(Table.3.B, Country == "EUA" &  Type.A == "Dairy Cattle")|> select(Year, N2O.Runoff.IEF, N2O.Vol.IEF)|>rename(Runoff.EU = N2O.Runoff.IEF, Vol.EU= N2O.Vol.IEF)
@@ -951,8 +949,9 @@ Table.3.B<-Table.3.B|>
             N2O.MM = sum(Direct.N2O),
             Indirect.N2O = sum(Indirect.N2O))|> # Total N2O produced
   mutate(Indirect.N2O = ifelse(Country == "NZL", 0, Indirect.N2O))
-
+#-------------------------------------------------------------------------------#
 ## Emissions from PRP
+#-------------------------------------------------------------------------------#
 ### IPCC classifies dung and urine deposited by grazing animals (PRP) as emissions from Agricultural soils
 ### This section is selecting PRP emission factors from Table 3.D and adding them to emissions from manure management. 
 ### Indirect emissions from PRP are estimated using reported IEF or IPCC default values with values are not reported
@@ -961,7 +960,7 @@ Table.3.D<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")|>
   filter(Emission.Source %in% c("N from grazing animals", "Atmospheric deposition","leaching and run-off"))|>
   select(1,2,3,6,9,10)
 
-Table.3.D.Indirect<-Table.3.D|>
+Table.3.D.Indirect<-Table.3.D|> # Values will be used to calculate indirect emissions from PRP
   filter(Emission.Source %in% c("Atmospheric deposition","leaching and run-off"))|>
   select(-5,-6)|>
   spread(Emission.Source, IEF)
@@ -973,40 +972,44 @@ Table.3.D<-full_join(Table.3.D, Table.3.D.Indirect)|>
          EF4.NVOL = 6,
          EF5.Leaching = 7,
          FracLEACH = `FracLEACH-(H)`)|>
-  mutate(EF3.PRP = ifelse(is.na(EF3.PRP), 0.004, EF3.PRP), # IPCC 2019 refinement aggregated default value:  TABLE 11.1
+  mutate(EF3.PRP = ifelse(is.na(EF3.PRP), 0.004, EF3.PRP), # IPCC 2019 refinement aggregated default value:  TABLE 11.1 <-see suggested reading at top for crop production
          EF4.NVOL = ifelse(is.na(EF4.NVOL), 0.01, EF4.NVOL), # IPCC 2019 refinement aggregated default value:  TABLE 11.3
          EF5.Leaching = ifelse(is.na(EF5.Leaching), 0.011, EF5.Leaching), # IPCC 2019 refinement aggregated default value:  TABLE 11.3
          FracGASM = ifelse(is.na(FracGASM), 0.21, FracGASM), # IPCC 2019 refinement aggregated default value:  TABLE 11.3
          FracLEACH = ifelse(is.na(FracLEACH), 0.24, FracLEACH)) # IPCC 2019 refinement aggregated default value:  TABLE 11.3
 
-## Total Emissions from Manure - indirect emissions from MM
+#-------------------------------------------------------------------------------#
+# Total Emissions from Manure - indirect emissions from MM
+#-------------------------------------------------------------------------------#
 
 MM<-full_join(Table.3.B, Table.3.D)|>
-  mutate(PRP.N2O = ((N.Pasture*EF3.PRP)*(44/28))/10^6, # See Equation 11.1 in 2019 Refinement N2O-N_prp
-         PRP.Vol = (((N.Pasture*FracGASM)*EF4.NVOL)*(44/28))/10^6,
-         PRP.Leach = (((N.Pasture*FracLEACH)*EF5.Leaching)*(44/28))/10^6,
-         PRP.Ind = PRP.Vol+PRP.Leach, # See Equation 11.10 and 11.11 in 2019 Refinement
-         EM.MM = (CH4.MM*25) + ((N2O.MM+PRP.N2O+PRP.Ind+Indirect.N2O)*298))
-
-## Enteric Methane Emissions
+  mutate(PRP.N2O = ((N.Pasture*EF3.PRP)*(44/28))/10^6, # See Equation 11.1 in 2019 Refinement N2O-N_prp: kt N2O
+         PRP.Vol = (((N.Pasture*FracGASM)*EF4.NVOL)*(44/28))/10^6, # kt N2O
+         PRP.Leach = (((N.Pasture*FracLEACH)*EF5.Leaching)*(44/28))/10^6, # kt N2O
+         PRP.Ind = PRP.Vol+PRP.Leach, # See Equation 11.10 and 11.11 in 2019 Refinement, kt N2O
+         EM.MM = (CH4.MM*25) + ((N2O.MM+PRP.N2O+PRP.Ind+Indirect.N2O)*298)) # Value shown in kt CO2eq
+#-------------------------------------------------------------------------------#
+# Enteric Methane Emissions
+#-------------------------------------------------------------------------------#
 
 Table.3.A<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_A_2023.csv")|>
   mutate(across(c("Year","Population", "GE", "Ym", "IEF","CH4.kt", "Total.Pop", "Share.Pop","Weight", "Milk Yield", "DE"), as.numeric),
          `Milk Yield` = ifelse(Type.A == "Non-Dairy Cattle", 0, `Milk Yield`),
-         W.Weight = Weight*Share.Pop,
+         W.Weight = Weight*Share.Pop, #estimating weights
          W.GE = GE*Share.Pop,
-         W.Ym = Ym*GE)|>
+         W.Ym = Ym*Share.Pop)|>
   filter(!is.na(CH4.kt)|!is.na(Population))|>
   group_by(Type.A, Year, Country)|>
-  summarise(Population = sum(Population),
-            EM.CH4 = sum(CH4.kt),
-            GE = sum(W.GE),
-            Ym = sum(W.Ym),
-            Weight = sum(W.Weight),
-            `Milk Yield` = sum(`Milk Yield`))
+  summarise(Population = sum(Population), # Total population for dairy and Non-dairy cattle
+            EM.CH4 = sum(CH4.kt), #Total emissions (kt CH4) for dairy and non-dairy cattle
+            GE = sum(W.GE), # weightted average GE
+            Ym = sum(W.Ym), # Weighted Average Ym
+            Weight = sum(W.Weight), # Average Weight
+            `Milk Yield` = sum(`Milk Yield`)) # Average milk production 
 
-
-# Correcting for missing Values or large outliers
+# Correcting for missing Values or large outliers or miscalculation
+# missing Value using EU average over period
+# US Values used for Canadian non-dairy cattle weight (reporting issue in NIR)
 
 EU<-Table.3.A|>filter(Country == "EUA")|>select(Year, Weight,  Type.A)|>rename(Weight.EU = Weight)
 USA <- Table.3.A|>filter(Country == "USA")|>select(Year,Type.A, Weight)|>rename(Weight.US = Weight)
@@ -1032,14 +1035,18 @@ NIR_2023_Cattle<-full_join(Enteric, MM, by=c("Year" = "Year", "Country" = "Count
   
 fwrite(NIR_2023_Cattle, file = "~/Simpson Centre/NIR/02-Data/NIR_2023_Cattle.csv")                           
                            
-#-------------------------------------------------------------------------------#         
+#-------------------------------------------------------------------------------# 
+
 # Crop and Land use Variables
+
 #-------------------------------------------------------------------------------#
 
 Table.3.D<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
 Table.4<-read_csv("~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")                         
-                           
-### Fertilizer Emissions (Synthetic induced N2O emissions to CO2 emissions from Urea and carbon Containing fertilizers)
+
+#------------------------------------------------------------------------------#                          
+# Fertilizer Emissions (Synthetic induced N2O emissions to CO2 emissions from Urea and carbon Containing fertilizers)
+#------------------------------------------------------------------------------#  
 
 Table.3.D<-Table.3.D|>
   mutate(FracGASF = ifelse(is.na(FracGASF) & Emission == "N2O", 0.11, FracGASF), # 2019 refinement default values
@@ -1055,7 +1062,7 @@ F.EM.Direct <- Table.3.D|>
   select(-4,-11)|>
   rename(Direct.EM = Emissions.kt)|>
   mutate(T.Frac.GAS = ifelse( Emission.Source == "Inorganic N emissions", FracGASF*Application,FracGASM*Application),
-         T.Frac.Leach = `FracLEACH-(H)`*Application)
+         T.Frac.Leach = `FracLEACH-(H)`*Application) # Nitrogen loss from Organic and inorganic fertilizers -> see 2019 Refinement for description of methodology
 
 F.EM.Indirect<-Table.3.D|>
   filter(Emission.Source %in% c("Atmospheric deposition", "leaching and run-off"))|>
@@ -1065,9 +1072,9 @@ F.EM.Indirect<-Table.3.D|>
          IEF.Leach = `leaching and run-off`)
 
 F.EM <-full_join(F.EM.Direct, F.EM.Indirect)|>
-  mutate(EM.GAS = ((T.Frac.GAS*IEF.GAS)*(44/28))/10^6,
-         EM.Leach = ((T.Frac.Leach*IEF.Leach)*(44/28))/10^6,
-         N2O.EM = Direct.EM+EM.GAS+EM.Leach)
+  mutate(EM.GAS = ((T.Frac.GAS*IEF.GAS)*(44/28))/10^6, # estimating indirect emissions from fertilizer use -> see 2019 Refinement for description of methodology
+         EM.Leach = ((T.Frac.Leach*IEF.Leach)*(44/28))/10^6, # estimating indirect emissions from fertilizer use -> see 2019 Refinement for description of methodology
+         N2O.EM = Direct.EM+EM.GAS+EM.Leach) # Total emissions from agricultural soils for fertilizer use
 
 F.CO2<-Table.3.D|>
   filter(Emission.Source %in% c("Urea", "Other carbon-containing fertlizers"))|>
@@ -1079,25 +1086,25 @@ F.EM<-full_join(F.EM, F.CO2)|>
   mutate(`Other carbon-containing fertlizers` = ifelse(Emission.Source == "Organic N emissions", 0, `Other carbon-containing fertlizers`),
          Urea = ifelse(Emission.Source == "Organic N emissions", 0, Urea),
          Application = ifelse(Country == "AUS", Application*1000, Application), # AUS reported Application rate in Tonnes not kg
-         kt.CO2eq = N2O.EM*298 + `Other carbon-containing fertlizers` + Urea,
-         kg.CO2eq.kg.N = (kt.CO2eq*10^6)/Application)
+         kt.CO2eq = N2O.EM*298 + `Other carbon-containing fertlizers` + Urea, # total emissions kt CO2eq
+         kg.CO2eq.kg.N = (kt.CO2eq*10^6)/Application) # Intensity measure kg CO2eq/ha
 
-Land.Area<-Table.4|>
+Land.Area<-Table.4|> # Land area
   filter(`Land Use` == "Total Cropland")|>
   select(1,2,4)
 
 F.EM<-full_join(F.EM,Land.Area)|>
-  mutate(EM.Ha = kt.CO2eq/Total.Area.kha)
+  mutate(EM.Ha = kt.CO2eq/Total.Area.kha) # estimated intensity t CO2eq/ha
 
 fwrite(F.EM, file = "~/Simpson Centre/NIR/02-Data/NIR_2023_Fertilizer.csv")
 
 #-------------------------------------------------------------------------------#
-#Crop Production Based Emissions
+# Crop Production Based Emissions
 #-------------------------------------------------------------------------------#
 Table.3.D<-read_csv("~/Simpson Centre/NIR/02-Data/Table_3_D_2023.csv")
 Table.4<-read_csv("~/Simpson Centre/NIR/02-Data/Table_4_2023.csv")              
 
-EM.Crop<-Table.3.D|>
+EM.Crop<-Table.3.D|> # Select headline emissions related to crop production
   select(1,2,3,7,11)|>
   filter(Emission.Source %in% c("Direct N2O emissions", "Indirect N2O emissions", "Urea", "Other carbon-containing fertlizers"))|>
   mutate(CO2eq = ifelse(Emission == "N2O", Emissions.kt*298, Emissions.kt),
@@ -1106,11 +1113,11 @@ EM.Crop<-Table.3.D|>
   summarise(CO2eq = sum(CO2eq))
 
 
-EM.PRP<-Table.3.D|>
+EM.PRP<-Table.3.D|> # grazing animal data
   filter(Emission.Source %in% c("N from grazing animals"))|>
   select(1,2,3,5,6,7,9,10)
 
-EM.PRP.Indirect<-Table.3.D|>
+EM.PRP.Indirect<-Table.3.D|>  # indirect emissions data 
   filter(Emission.Source %in% c("Atmospheric deposition","leaching and run-off"))|>
   select(1,2,3,6)|>
   spread(Emission.Source, IEF)
@@ -1122,6 +1129,9 @@ EM.PRP<-full_join(EM.PRP, EM.PRP.Indirect)|>
          EF4.NVOL = 8,
          EF5.Leaching = 9,
          FracLEACH = `FracLEACH-(H)`)|>
+  #-------------------------------------------------------------------------------#  
+  # Estimating emissions from grazing animal to be subtracted from Total emissions from crop production
+  #-------------------------------------------------------------------------------#  
   mutate(N = ifelse(Country == "AUS", N*1000, N),
          EF3.PRP = ifelse(is.na(EF3.PRP), 0.004, EF3.PRP), # IPCC 2019 refinement aggregated default value:  TABLE 11.1
          EF4.NVOL = ifelse(is.na(EF4.NVOL), 0.01, EF4.NVOL), # IPCC 2019 refinement aggregated default value:  TABLE 11.3
@@ -1134,22 +1144,22 @@ EM.PRP<-full_join(EM.PRP, EM.PRP.Indirect)|>
          CO2.PRP = N2O.PRP*298)|>
   select(Country, Year, N2O.PRP, CO2.PRP)
   
-EM.PRP[is.na(EM.PRP)]<-0
+EM.PRP[is.na(EM.PRP)]<-0 # replacing NA values
 
 EM.Crop<-full_join(EM.Crop, EM.PRP)|>
-  mutate(kt.CO2 = CO2eq-CO2.PRP)
+  mutate(kt.CO2 = CO2eq-CO2.PRP) # removing PRP emissions from Crop production
 
-Land.Use<-Table.4|>
+Land.Use<-Table.4|> # Selecting Emissions and land area data for cropland
   filter(`Land Use` == "Total Cropland")|>
   select(1,2,4,5)|>
   rename(Land.Use.EM = 4)
 
-EM.Crop<-full_join(EM.Crop, Land.Use)|>
+EM.Crop<-full_join(EM.Crop, Land.Use)|> # Calculating Net Emissions from crop production
   mutate(Total.CO2eq = Land.Use.EM+kt.CO2,
          Total.CO2eq.ha = Total.CO2eq/Total.Area.kha,
          CO2eq.ha = kt.CO2/Total.Area.kha)
 
-fwrite(EM.Crop, file = "~/Simpson Centre/NIR/02-Data/NIR_2023_CropProduction.csv")  
+fwrite(EM.Crop, file = "~/Simpson Centre/NIR/02-Data/NIR_2023_CropProduction.csv") # Can be Found at: https://github.com/Jbourassa05/Simpson_Centre-Carbon_Program
   
 #-------------------------------------------------------------------------------#
 ## National Emission Trends + Intensity ----
